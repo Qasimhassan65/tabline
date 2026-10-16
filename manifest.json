@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "Tabline \u2014 screenshots on a string",
+  "version": "2.2.0",
+  "description": "Midnight Glass screenshot rope for tabs and desktop apps. Capture, copy or save.",
+  "permissions": [
+    "activeTab",
+    "tabs",
+    "scripting",
+    "storage",
+    "clipboardWrite",
+    "nativeMessaging",
+    "favicon"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Open Tabline"
+  },
+  "commands": {
+    "toggle-tabline": {
+      "suggested_key": "Alt+S",
+      "description": "Open or close Tabline"
+    }
+  },
+  "options_page": "settings.html"
+}

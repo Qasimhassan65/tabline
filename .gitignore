@@ -1,0 +1,25 @@
+node_modules/
+*.zip
+.DS_Store
+Thumbs.db
+.env
+.env.*
+*.pem
+*.pfx
+*.p12
+
+# Local host registration contains the installation path and extension ID.
+companion/com.tabline.companion.json
+
+# Build outputs and local screenshots. Stable executable is a release asset.
+companion/build/
+companion/*.exe
+companion/*.dll
+companion/*.png
+companion/*.jpg
+companion/*.jpeg
+
+# Superseded implementations retained locally only.
+activity.js
+companion/WindowCapture.cpp
+companion/BuildCapture.cmd
