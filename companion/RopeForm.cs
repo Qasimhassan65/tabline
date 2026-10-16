@@ -36,6 +36,9 @@ internal sealed class RopeForm:Form {
  private bool MouseWasDown;
  private IntPtr SourceWindow;
  private string Hover;
+ private string OpeningHighlight;
+ private Point OpeningPointer;
+ private int HoverNavigation,PressedNavigation;
  private int FocusMismatchAt;
  internal string DismissReason;
  internal string LastClickedId;
@@ -52,7 +55,8 @@ internal sealed class RopeForm:Form {
  protected override CreateParams CreateParams{get{var p=base.CreateParams;p.ExStyle|=0x80000|0x80|0x08000000;return p;}}
  internal RopeForm(){Text="Tabline rope";FormBorderStyle=FormBorderStyle.None;ShowInTaskbar=false;TopMost=true;StartPosition=FormStartPosition.Manual;InputTimer.Tick+=(s,e)=>CheckInput();MotionTimer.Tick+=(s,e)=>AnimateScroll();}
  internal void Open(List<TablineCompanion.Card> cards,Dictionary<string,object> request){
-  ReleaseThumbnails();DisposeImages();Cards.Clear();Cards.AddRange(cards);VisualOffset=0;TargetOffset=0;MotionTimer.Stop();Hover=null;FocusMismatchAt=0;DismissReason=null;
+  ReleaseThumbnails();DisposeImages();Cards.Clear();Cards.AddRange(cards);VisualOffset=0;TargetOffset=0;MotionTimer.Stop();Hover=null;OpeningHighlight=null;HoverNavigation=PressedNavigation=0;FocusMismatchAt=0;DismissReason=null;
+  Cursor=Cursors.Default;
   // Picker-only order: never move real browser tabs or change app focus.
   int current=Cards.FindIndex(c=>c.Current);
   if(current>=0){var active=Cards[current];Cards.RemoveAt(current);Cards.Insert(Cards.Count/2,active);}
@@ -65,9 +69,10 @@ internal sealed class RopeForm:Form {
   LayoutForSource(new Rectangle(bounds.Left,bounds.Top,bounds.Right-bounds.Left,bounds.Bottom-bounds.Top),UiScale,false);
   current=Cards.FindIndex(c=>c.Current);
   if(current>=0){VisualOffset=current*Pitch;TargetOffset=(int)Math.Round(VisualOffset);}
+  OpeningHighlight=current<0?null:Cards[current].Id;OpeningPointer=Cursor.Position;
   MouseWasDown=(GetAsyncKeyState(1)&0x8000)!=0;SetWindowDisplayAffinity(Handle,0x11);PresentRope();Show();SyncThumbnails();InputTimer.Start();
  }
- internal void Dismiss(string reason="requested"){if(!Visible)return;DismissReason=reason;MotionTimer.Stop();InputTimer.Stop();Tip.Hide(this);ReleaseThumbnails();Hide();DisposeImages();TablineCompanion.Send(new{@event="closed"});}
+ internal void Dismiss(string reason="requested"){if(!Visible)return;DismissReason=reason;MotionTimer.Stop();InputTimer.Stop();OpeningHighlight=null;HoverNavigation=PressedNavigation=0;Capture=false;Tip.Hide(this);ReleaseThumbnails();Hide();DisposeImages();TablineCompanion.Send(new{@event="closed"});}
  private void DisposeImages(){foreach(var card in Cards){if(card.Image!=null){card.Image.Dispose();card.Image=null;}if(card.Icon!=null){card.Icon.Dispose();card.Icon=null;}}}
  private void CheckInput(){
   TablineCompanion.Rect current;
@@ -76,17 +81,18 @@ internal sealed class RopeForm:Form {
    float scale=UiScale;try{uint dpi=GetDpiForWindow(SourceWindow);if(dpi>0)scale=dpi/96f;}catch(EntryPointNotFoundException){}
    if(source!=SourceBounds||Math.Abs(scale-UiScale)>.01f){LayoutForSource(source,scale,true);Render();}
   }
-  if(!Animating)UpdateHover(PointToClient(Cursor.Position));
+  UpdateHover(PointToClient(Cursor.Position));
   if((GetAsyncKeyState(27)&0x8000)!=0){Dismiss();return;}
   var foreground=TablineCompanion.GetForegroundWindow();
   if(foreground==SourceWindow||TablineCompanion.IsOwnWindow(foreground)){FocusMismatchAt=0;}
   else if(foreground!=IntPtr.Zero){if(FocusMismatchAt==0)FocusMismatchAt=Environment.TickCount;else if(unchecked((uint)(Environment.TickCount-FocusMismatchAt))>180){Dismiss("focus-changed");return;}}
-  bool down=(GetAsyncKeyState(1)&0x8000)!=0;if(down&&!MouseWasDown&&Hit(PointToClient(Cursor.Position))==null){Dismiss();return;}MouseWasDown=down;
+  bool down=(GetAsyncKeyState(1)&0x8000)!=0;var point=PointToClient(Cursor.Position);if(down&&!MouseWasDown&&Hit(point)==null&&NavigationAt(point)==0){Dismiss();return;}MouseWasDown=down;
  }
  internal void ScrollCards(int amount){
+  bool hadOpening=OpeningHighlight!=null;OpeningHighlight=null;
   int max=MaximumOffset(),next=Math.Max(0,Math.Min(max,TargetOffset+amount));
-  if(next==TargetOffset&&Math.Abs(next-VisualOffset)<.2)return;
-  TargetOffset=next;Tip.Hide(this);bool hadHover=Hover!=null;Hover=null;if(hadHover)Render();
+  if(next==TargetOffset&&Math.Abs(next-VisualOffset)<.2){if(hadOpening)Render();return;}
+  TargetOffset=next;Tip.Hide(this);bool hadHover=Hover!=null;Hover=null;if(hadHover||hadOpening)Render();
   if(Math.Abs(TargetOffset-VisualOffset)<.2)return;
   if(!MotionTimer.Enabled){MotionClock.Restart();LastMotionTime=0;MotionTimer.Start();}
  }
@@ -98,22 +104,44 @@ internal sealed class RopeForm:Form {
   if(!Animating)UpdateHover(PointToClient(Cursor.Position));
  }
  protected override void OnMouseWheel(MouseEventArgs e){ScrollCards(-e.Delta*2);base.OnMouseWheel(e);}
- private void UpdateHover(Point point){var card=Hit(point);string id=card==null?null:card.Id;if(Hover!=id){Tip.Hide(this);Hover=id;Cursor=card==null?Cursors.Default:Cursors.Hand;Render();}}
- protected override void OnMouseMove(MouseEventArgs e){if(!Animating)UpdateHover(e.Location);base.OnMouseMove(e);}
- internal void ClickAt(Point point){var card=Hit(point);LastClickPoint=point.X+","+point.Y+" offset="+VisualOffset;LastClickedId=card==null?null:card.Id;if(card==null)return;string operation=OperationAt(Cards.IndexOf(card),point);TablineCompanion.Select(card,operation);}
+ private void UpdateHover(Point point){
+  // Showing the picker can synthesize mouse-move messages. A stationary
+  // pointer must not replace the current-tab outline on the first frame.
+  if(OpeningHighlight!=null&&PointToScreen(point)==OpeningPointer)return;
+  int navigation=NavigationAt(point);var card=navigation==0&&!Animating&&PressedNavigation==0?Hit(point):null;string id=card==null?null:card.Id;
+  bool clearOpening=id!=null&&OpeningHighlight!=null;if(clearOpening)OpeningHighlight=null;
+  Cursor=id!=null||(navigation!=0&&NavigationEnabled(navigation))?Cursors.Hand:Cursors.Default;
+  if(Hover!=id||HoverNavigation!=navigation||clearOpening){Tip.Hide(this);Hover=id;HoverNavigation=navigation;Render();}
+ }
+ protected override void OnMouseMove(MouseEventArgs e){UpdateHover(e.Location);base.OnMouseMove(e);}
+ protected override void OnMouseDown(MouseEventArgs e){if(e.Button==MouseButtons.Left){int direction=NavigationAt(e.Location);if(direction!=0&&NavigationEnabled(direction)){PressedNavigation=direction;MouseWasDown=true;Capture=true;Render();}}base.OnMouseDown(e);}
+ internal void ClickAt(Point point){int navigation=NavigationAt(point);if(navigation!=0){Navigate(navigation);return;}var card=Hit(point);LastClickPoint=point.X+","+point.Y+" offset="+VisualOffset;LastClickedId=card==null?null:card.Id;if(card==null)return;string operation=OperationAt(Cards.IndexOf(card),point);TablineCompanion.Select(card,operation);}
  private string OperationAt(int index,Point point){return new RectangleF(193,182,112,47).Contains(CardLocalPoint(index,point))?"save":"copy";}
- protected override void OnMouseUp(MouseEventArgs e){if(e.Button==MouseButtons.Left)ClickAt(e.Location);base.OnMouseUp(e);}
+ protected override void OnMouseUp(MouseEventArgs e){if(e.Button==MouseButtons.Left){int pressed=PressedNavigation;PressedNavigation=0;Capture=false;if(pressed!=0){if(NavigationAt(e.Location)==pressed)Navigate(pressed);else Render();}else ClickAt(e.Location);}base.OnMouseUp(e);}
  private static RectangleF Part(RectangleF r,float x,float y,float w,float h){float k=r.Width/376f;return new RectangleF(r.X+x*k,r.Y+y*k,w*k,h*k);}
  private static RectangleF SaveBounds(RectangleF r){return Part(r,193,182,112,47);}
  private static RectangleF CopyBounds(RectangleF r){return Part(r,72,182,114,47);}
  private static RectangleF PictureBounds(RectangleF r){return Part(r,13,14,350,218);}
  private int MaximumOffset(){return (int)Math.Round(Math.Max(0,(Cards.Count-1)*Pitch));}
+ private bool HasNavigation{get{return Cards.Count>1;}}
+ private bool CompactNavigation{get{return Width/UiScale<360;}}
+ private RectangleF CardViewport(){float width=Width/UiScale,inset=HasNavigation&&!CompactNavigation?52:0;return new RectangleF(inset,0,Math.Max(1,width-inset*2),Height/UiScale);}
+ private RectangleF NavigationBounds(int direction){float width=Width/UiScale,k=CardWidth/376;float cy=14+CableSag+(CompactNavigation?304*k+34:161.5f*k);return new RectangleF(direction<0?4:width-48,cy-22,44,44);}
+ private int NavigationAt(Point point){if(!HasNavigation)return 0;var p=new PointF(point.X/UiScale,point.Y/UiScale);return NavigationBounds(-1).Contains(p)?-1:NavigationBounds(1).Contains(p)?1:0;}
+ private bool NavigationEnabled(int direction){return HasNavigation&&(direction<0?TargetOffset>0:TargetOffset<MaximumOffset());}
+ private void Navigate(int direction){
+  if(!NavigationEnabled(direction))return;
+  float position=TargetOffset/Pitch,nearest=(float)Math.Round(position);if(Math.Abs(TargetOffset-nearest*Pitch)<.75f)position=nearest;
+  int index=direction>0?(int)Math.Floor(position)+1:(int)Math.Ceiling(position)-1;index=Math.Max(0,Math.Min(Cards.Count-1,index));
+  ScrollCards((int)Math.Round(index*Pitch)-TargetOffset);
+ }
  private float CableSag{get{return Math.Max(14,Math.Min(26,.016f*Width/UiScale));}}
  private void ConfigureMetrics(float width,float height){
   Gap=Math.Min(24,Math.Max(12,width*.025f));
   CardWidth=Math.Min(300,Math.Max(240,(width-152)/5));
   CardWidth=Math.Min(CardWidth,Math.Max(72,width-12));
-  CardWidth=Math.Min(CardWidth,Math.Max(72,(height-18-Math.Max(14,Math.Min(26,.016f*width)))*376/318));
+  float navigationRow=Cards.Count>1&&width<360?56:0;
+  CardWidth=Math.Min(CardWidth,Math.Max(72,(height-18-navigationRow-Math.Max(14,Math.Min(26,.016f*width)))*376/318));
   RowPadding=(width-CardWidth)/2;
  }
  private void LayoutForSource(Rectangle source,float scale,bool preserve){
@@ -125,7 +153,7 @@ internal sealed class RopeForm:Form {
   int available=Math.Max(1,Math.Min(screen.Bottom,source.Bottom-8)-top);
   int width=Math.Max(1,right-left);
   ConfigureMetrics(width/UiScale,available/UiScale);
-  int height=(int)Math.Ceiling((18+Math.Max(14,Math.Min(26,.016f*width/UiScale))+318*CardWidth/376)*UiScale);
+  int height=(int)Math.Ceiling((18+Math.Max(14,Math.Min(26,.016f*width/UiScale))+318*CardWidth/376+(HasNavigation&&width/UiScale<360?56:0))*UiScale);
   Bounds=new Rectangle(left,top,width,Math.Max(1,Math.Min(available,height)));
   if(preserve){VisualOffset=Math.Min(MaximumOffset(),position*Pitch);TargetOffset=Math.Min(MaximumOffset(),(int)Math.Round(target*Pitch));}
  }
@@ -147,15 +175,17 @@ internal sealed class RopeForm:Form {
  protected override void WndProc(ref Message m){if(m.Msg==0x21){m.Result=new IntPtr(3);return;}if(m.Msg==0x020E){int delta=(short)((m.WParam.ToInt64()>>16)&65535);ScrollCards(delta*2);m.Result=IntPtr.Zero;return;}base.WndProc(ref m);}
  private RectangleF CardBounds(int i){float x=RowPadding+i*Pitch-VisualOffset;return new RectangleF(x,CableY(x+CardWidth/2)+CableToCard*CardWidth/376,CardWidth,285*CardWidth/376);}
  private TablineCompanion.Card Hit(Point p){
+  if(!CardViewport().Contains(p.X/UiScale,p.Y/UiScale))return null;
   float x=p.X/UiScale;
   for(int i=Cards.Count-1;i>=0;i--){var r=CardBounds(i);if(x<r.Left-12||x>r.Right+12)continue;var local=CardLocalPoint(i,p);using(var face=Rounded(new RectangleF(0,0,376,285),18))if(face.IsVisible(local))return Cards[i];}
   return null;
  }
  internal void UpdateTabs(List<TablineCompanion.Card> tabs){
+  int previousCount=Cards.Count;
   int anchor=Cards.Count==0?-1:Math.Max(0,Math.Min(Cards.Count-1,(int)Math.Round(VisualOffset/Pitch)));string anchorId=anchor<0?null:Cards[anchor].Id;
   bool changed=false;foreach(var incoming in tabs){var existing=Cards.Find(c=>!c.Native&&c.Id==incoming.Id);if(existing==null){Cards.Add(incoming);changed=true;}else{if(existing.Title!=incoming.Title){existing.Title=incoming.Title;changed=true;}if(existing.ImageData!=incoming.ImageData){if(existing.Image!=null){existing.Image.Dispose();existing.Image=null;}existing.ImageData=incoming.ImageData;changed=true;}}}
   for(int i=Cards.Count-1;i>=0;i--)if(!Cards[i].Native&&!tabs.Exists(c=>c.Id==Cards[i].Id)){if(Cards[i].Image!=null)Cards[i].Image.Dispose();if(Cards[i].Icon!=null)Cards[i].Icon.Dispose();Cards.RemoveAt(i);changed=true;}
-  if(changed){int next=Cards.FindIndex(c=>c.Id==anchorId);if(next>=0){float shift=(next-anchor)*Pitch;VisualOffset+=shift;TargetOffset+=(int)Math.Round(shift);}VisualOffset=Math.Max(0,Math.Min(MaximumOffset(),VisualOffset));TargetOffset=Math.Max(0,Math.Min(MaximumOffset(),TargetOffset));if(Hover!=null&&!Cards.Exists(c=>c.Id==Hover))Hover=null;if(Visible)Render();}
+  if(changed){int next=Cards.FindIndex(c=>c.Id==anchorId);if(next>=0){float shift=(next-anchor)*Pitch;VisualOffset+=shift;TargetOffset+=(int)Math.Round(shift);}VisualOffset=Math.Max(0,Math.Min(MaximumOffset(),VisualOffset));TargetOffset=Math.Max(0,Math.Min(MaximumOffset(),TargetOffset));if(Hover!=null&&!Cards.Exists(c=>c.Id==Hover))Hover=null;if(OpeningHighlight!=null&&!Cards.Exists(c=>c.Id==OpeningHighlight))OpeningHighlight=null;if(Visible){if(previousCount!=Cards.Count)LayoutForSource(SourceBounds,UiScale,true);Render();}}
  }
  internal void ClearImages(){DisposeImages();foreach(var card in Cards)card.ImageData=null;if(Visible)Render();}
  private static GraphicsPath Rounded(RectangleF r,float radius){var p=new GraphicsPath();float d=radius*2;p.AddArc(r.X,r.Y,d,d,180,90);p.AddArc(r.Right-d,r.Y,d,d,270,90);p.AddArc(r.Right-d,r.Bottom-d,d,d,0,90);p.AddArc(r.X,r.Bottom-d,d,d,90,90);p.CloseFigure();return p;}
@@ -188,17 +218,42 @@ internal sealed class RopeForm:Form {
   }
  }
  private void DrawActions(Graphics g,RectangleF r){var saved=g.Save();g.TranslateTransform(r.X,r.Y);float k=r.Width/376;g.ScaleTransform(k,k);DrawAction(g,new RectangleF(72,182,114,47),false);DrawAction(g,new RectangleF(193,182,112,47),true);g.Restore(saved);}
+ private void DrawNavigation(Graphics g){
+  if(!HasNavigation)return;
+  foreach(int direction in new[]{-1,1}){
+   var target=NavigationBounds(direction);bool enabled=NavigationEnabled(direction),hovered=enabled&&HoverNavigation==direction,pressed=enabled&&PressedNavigation==direction;
+   // Alpha-zero pixels pass mouse input through a layered window. This tiny
+   // near-transparent hit surface keeps the full 44-DIP target clickable.
+   using(var hit=new SolidBrush(Color.FromArgb(1,18,25,35)))g.FillRectangle(hit,target);
+   var box=target;box.Inflate(-4,-4);if(pressed)box.Inflate(-.8f,-.8f);
+   for(int i=2;i>=1;i--)using(var shadow=new SolidBrush(Color.FromArgb(enabled?13:6,0,0,0)))g.FillEllipse(shadow,box.X-i,box.Y+1,box.Width+i*2,box.Height+i*2);
+   using(var path=Rounded(box,box.Width/2)){
+    var top=enabled?Color.FromArgb(246,hovered?49:35,hovered?65:49,hovered?81:64):Color.FromArgb(210,26,35,46);
+    var bottom=enabled?Color.FromArgb(250,21,32,44):Color.FromArgb(224,18,26,36);
+    using(var fill=new LinearGradientBrush(box,top,bottom,90f))g.FillPath(fill,path);
+    using(var edge=new LinearGradientBrush(box,Color.FromArgb(enabled?170:76,146,169,191),Color.FromArgb(enabled?90:44,68,93,119),90f))using(var pen=new Pen(edge,1))g.DrawPath(pen,path);
+   }
+   var inset=box;inset.Inflate(-1.3f,-1.3f);using(var path=Rounded(inset,inset.Width/2))using(var pen=new Pen(Color.FromArgb(enabled?24:9,230,240,252),.65f))g.DrawPath(pen,path);
+   float cx=box.X+box.Width/2,cy=box.Y+box.Height/2;
+   using(var pen=new Pen(enabled?Color.FromArgb(238,236,243,251):Color.FromArgb(90,133,149,167),1.8f)){
+    pen.StartCap=pen.EndCap=LineCap.Round;pen.LineJoin=LineJoin.Round;
+    g.DrawLines(pen,new[]{new PointF(cx-direction*2.8f,cy-5.6f),new PointF(cx+direction*2.8f,cy),new PointF(cx-direction*2.8f,cy+5.6f)});
+   }
+  }
+ }
  private Bitmap PaintRope(){
   var bitmap=new Bitmap(Math.Max(1,Width),Math.Max(1,Height),PixelFormat.Format32bppArgb);
   using(var g=Graphics.FromImage(bitmap)){
    g.Clear(Color.Transparent);g.ScaleTransform(UiScale,UiScale);g.SmoothingMode=SmoothingMode.AntiAlias;g.TextRenderingHint=System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
    g.InterpolationMode=InterpolationMode.HighQualityBicubic;float width=Width/UiScale;
+   // Keep the navigation gutters clear of complete card surfaces and DWM hosts.
+   var contentState=g.Save();g.SetClip(CardViewport());
    // The return jaw is behind the cable; the front plate is painted over the card.
    for(int i=0;i<Cards.Count;i++){
     var r=CardBounds(i);if(r.Right<0||r.Left>width)continue;
     var saved=g.Save();g.TranslateTransform(r.X,r.Y);float k=r.Width/376;g.ScaleTransform(k,k);DrawClipRear(g,188,-CableToCard-ClipAboveCable);g.Restore(saved);
    }
-   DrawCable(g);
+   g.Restore(contentState);DrawCable(g);contentState=g.Save();g.SetClip(CardViewport());
    for(int i=0;i<Cards.Count;i++){
     var card=Cards[i];var r=CardBounds(i);bool hovered=Hover==card.Id;
     if(r.Right<-12||r.Left>width+12){if(card.Image!=null){card.Image.Dispose();card.Image=null;}if(card.Icon!=null){card.Icon.Dispose();card.Icon=null;}continue;}
@@ -211,7 +266,7 @@ internal sealed class RopeForm:Form {
     }
     var picture=new RectangleF(13,14,350,218);
     if(card.Image==null)card.Image=Decode(card.ImageData);
-    if(card.Image!=null){var clipState=g.Save();using(var clip=Rounded(picture,9))g.SetClip(clip);float zoom=Math.Max(picture.Width/card.Image.Width,picture.Height/card.Image.Height);var source=new RectangleF((card.Image.Width-picture.Width/zoom)/2,(card.Image.Height-picture.Height/zoom)/2,picture.Width/zoom,picture.Height/zoom);g.DrawImage(card.Image,picture,source,GraphicsUnit.Pixel);g.Restore(clipState);}
+    if(card.Image!=null){var clipState=g.Save();using(var clip=Rounded(picture,9))g.SetClip(clip,CombineMode.Intersect);float zoom=Math.Max(picture.Width/card.Image.Width,picture.Height/card.Image.Height);var source=new RectangleF((card.Image.Width-picture.Width/zoom)/2,(card.Image.Height-picture.Height/zoom)/2,picture.Width/zoom,picture.Height/zoom);g.DrawImage(card.Image,picture,source,GraphicsUnit.Pixel);g.Restore(clipState);}
     else if(!card.Native||!DwmThumbnails.ContainsKey(card.Id)){
      DrawIcon(g,card,new RectangleF(157,34,62,62));
      using(var format=(StringFormat)StringFormat.GenericTypographic.Clone()){
@@ -225,17 +280,18 @@ internal sealed class RopeForm:Form {
     using(var font=new Font("Segoe UI",20,FontStyle.Regular,GraphicsUnit.Pixel))using(var ink=new SolidBrush(Color.FromArgb(235,241,247)))using(var format=(StringFormat)StringFormat.GenericTypographic.Clone()){
      format.Trimming=StringTrimming.EllipsisCharacter;format.FormatFlags|=StringFormatFlags.NoWrap;format.LineAlignment=StringAlignment.Center;g.DrawString(card.Title,font,ink,new RectangleF(61,240,295,33),format);
     }
-    if(hovered){
+    if(hovered||OpeningHighlight==card.Id){
      using(var path=Rounded(frame,18)){
       using(var glow=new Pen(Color.FromArgb(24,74,172,245),7))g.DrawPath(glow,path);
       using(var edge=new LinearGradientBrush(frame,Color.FromArgb(108,206,250),Color.FromArgb(60,170,245),90f))using(var pen=new Pen(edge,2.3f))g.DrawPath(pen,path);
      }
-     DrawAction(g,new RectangleF(72,182,114,47),false);DrawAction(g,new RectangleF(193,182,112,47),true);
     }
+    if(hovered){DrawAction(g,new RectangleF(72,182,114,47),false);DrawAction(g,new RectangleF(193,182,112,47),true);}
     g.Restore(saved);
     // The card pivots around the fastener; the folded cap stays on the cable.
     saved=g.Save();g.TranslateTransform(r.X,r.Y);float k=r.Width/376;g.ScaleTransform(k,k);DrawClip(g,188,-CableToCard-ClipAboveCable);g.Restore(saved);
    }
+   g.Restore(contentState);DrawNavigation(g);
   }
   return bitmap;
  }
@@ -279,7 +335,7 @@ internal sealed class RopeForm:Form {
  private static void DrawClip(Graphics g,float center,float y){
   var body=new RectangleF(center-ClipWidth/2,y,ClipWidth,ClipHeight);
   // Contact belongs to the card face, not a floating rectangular drop shadow.
-  var saved=g.Save();using(var face=Rounded(new RectangleF(0,0,376,285),18))g.SetClip(face);
+  var saved=g.Save();using(var face=Rounded(new RectangleF(0,0,376,285),18))g.SetClip(face,CombineMode.Intersect);
   for(int i=3;i>=1;i--){float spread=i*.55f;using(var path=Rounded(new RectangleF(body.X+1-spread,body.Y+2-spread,body.Width+spread*2,body.Height+spread*2),1.5f+spread))using(var brush=new SolidBrush(Color.FromArgb(18,0,0,0)))g.FillPath(brush,path);}
   g.Restore(saved);
   using(var path=Rounded(body,1.5f)){
@@ -288,7 +344,7 @@ internal sealed class RopeForm:Form {
     g.FillPath(metal,path);
    }
    using(var edge=new Pen(Color.FromArgb(150,207,222,237),.65f))g.DrawPath(edge,path);
-   var state=g.Save();g.SetClip(path);
+   var state=g.Save();g.SetClip(path,CombineMode.Intersect);
    using(var glaze=new LinearGradientBrush(body,Color.Transparent,Color.Transparent,90f)){
     glaze.InterpolationColors=new ColorBlend{Positions=new[]{0f,.1f,.2f,.32f,.6f,.88f,1f},Colors=new[]{Color.FromArgb(35,255,255,255),Color.FromArgb(30,24,36,52),Color.FromArgb(12,39,52,72),Color.FromArgb(12,229,238,251),Color.FromArgb(35,243,248,255),Color.FromArgb(18,37,53,75),Color.FromArgb(65,36,49,68)}};
     g.FillPath(glaze,path);
@@ -314,8 +370,9 @@ internal sealed class RopeForm:Form {
  // DWM reuses the desktop compositor's existing window surfaces; no WGC stream or bitmap capture.
  private void SyncThumbnails(){
   var visible=new HashSet<string>();
+  var viewport=CardViewport();var viewportPixels=Rectangle.FromLTRB((int)Math.Ceiling(viewport.Left*UiScale),0,(int)Math.Floor(viewport.Right*UiScale),Height);var viewportScreen=new Rectangle(Left+viewportPixels.Left,Top,viewportPixels.Width,Height);
   for(int i=0;i<Cards.Count;i++){
-   var card=Cards[i];if(!card.Native)continue;var r=CardBounds(i);var p=PictureBounds(r);var photo=Rectangle.FromLTRB((int)Math.Round(p.Left*UiScale),(int)Math.Round(p.Top*UiScale),(int)Math.Round(p.Right*UiScale),(int)Math.Round(p.Bottom*UiScale));var clipped=Rectangle.Intersect(photo,new Rectangle(0,0,Width,Height));if(clipped.Width<1||clipped.Height<1)continue;
+   var card=Cards[i];if(!card.Native)continue;var r=CardBounds(i);var p=PictureBounds(r);var photo=Rectangle.FromLTRB((int)Math.Round(p.Left*UiScale),(int)Math.Round(p.Top*UiScale),(int)Math.Round(p.Right*UiScale),(int)Math.Round(p.Bottom*UiScale));var clipped=Rectangle.Intersect(photo,viewportPixels);if(clipped.Width<1||clipped.Height<1)continue;
    visible.Add(card.Id);AppThumbnailWindow window;
    if(!DwmThumbnails.TryGetValue(card.Id,out window)){window=new AppThumbnailWindow(this,card);DwmThumbnails[card.Id]=window;}
    if(!window.Place(photo,clipped,9*r.Width/376*UiScale)){window.Dispose();DwmThumbnails.Remove(card.Id);}
@@ -333,9 +390,9 @@ internal sealed class RopeForm:Form {
        using(var fill=new LinearGradientBrush(q,Color.FromArgb(31,43,55),Color.FromArgb(23,31,41),90f))g.FillPath(fill,corners);
       }
       g.TranslateTransform(-photo.X,-photo.Y);g.ScaleTransform(UiScale,UiScale);if(hovered)DrawActions(g,r);
-      window.ShowActions(surface,new Rectangle(Left+photo.Left,Top+photo.Top,photo.Width,photo.Height),new Rectangle(Left,Top,Width,Height),hovered);
+      window.ShowActions(surface,new Rectangle(Left+photo.Left,Top+photo.Top,photo.Width,photo.Height),viewportScreen,hovered);
      }
-    }else window.ShowActions(null,new Rectangle(Left+photo.Left,Top+photo.Top,photo.Width,photo.Height),new Rectangle(Left,Top,Width,Height),hovered);
+    }else window.ShowActions(null,new Rectangle(Left+photo.Left,Top+photo.Top,photo.Width,photo.Height),viewportScreen,hovered);
    }
   }
   var obsolete=new List<string>();foreach(var pair in DwmThumbnails)if(!visible.Contains(pair.Key))obsolete.Add(pair.Key);

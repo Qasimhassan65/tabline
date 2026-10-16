@@ -8,6 +8,10 @@ The current tab starts centered and upright before the first visible frame. Brow
 
 Desktop app cards follow the same curved path and retain their live DWM previews. Their complete surfaces stay upright because DWM thumbnail destinations do not support rotation; no extra screenshot stream or preview cache is introduced to simulate it. Source order remains stable during preview refreshes. The first and last cards can reach the center, and resizing preserves the source at the center. Drawing and Copy/Save hit testing share one transform, including display scaling. Motion timers still stop when scrolling settles or the picker closes.
 
+On opening, a blue outline identifies the centered current tab without showing Copy/Save until hover. Hovering a preview replaces this opening outline; scrolling or using an arrow clears it for the rest of that picker session. After that, only the hovered preview is blue.
+
+Fixed Midnight Glass arrow buttons move to the next or previous card position using the existing smooth animation. Repeated clicks accumulate, the appropriate arrow dims and becomes inactive at each end, and arrows are hidden for a single source. Clear edge gutters keep native images and hover actions away from the controls. Below 360 logical pixels of window width, the arrows sit below the previews to preserve image size. The clickable targets are 44 logical pixels across. Existing mouse-wheel behavior over cards is unchanged; there is no global scroll hook or background input listener.
+
 ## Update / install
 
 Existing project: reload Tabline in `chrome://extensions`. This also disconnects the previous helper and stops its old background capture jobs. Refresh any webpage still showing an older injected rope. Press Alt+S.
@@ -39,7 +43,7 @@ Cache limits exclude runtime, metadata, transient full-resolution capture buffer
 
 `companion/Build.ps1` uses the Windows .NET Framework C# compiler. This edition needs no C++ DLL, Node or Python runtime for normal use. `npm run check` checks extension JavaScript syntax.
 
-`companion/TablineCompanion-2.2.0-curved.exe --self-test` runs owned test windows, tests foreground screenshot copying and eased scrolling, and writes test-render PNG files beside the helper. It deliberately replaces the clipboard with a fixture screenshot and clicks only its owned test window. Test code is separate from the ordinary capture path.
+`companion/TablineCompanion-2.2.0-navigation.exe --self-test` runs owned test windows, tests foreground screenshot copying and eased scrolling, and writes test-render PNG files beside the helper. It deliberately replaces the clipboard with a fixture screenshot and clicks only its owned test window. Test code is separate from the ordinary capture path.
 
 
 ## Stable baseline
