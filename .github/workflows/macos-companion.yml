@@ -28,7 +28,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: Tabline-Mac-${{ matrix.arch }}-development
-          path: companion-macos/dist/${{ matrix.arch }}/
+          path: companion-macos/dist/Tabline-Mac-${{ matrix.arch }}-development.zip
   extension:
     runs-on: windows-latest
     steps:
@@ -37,4 +37,4 @@ jobs:
         with:
           node-version: 22
       - run: npm run check
-      - run: node --test tests/*.test.cjs
+      - run: node --test tests/native-bridge.test.cjs

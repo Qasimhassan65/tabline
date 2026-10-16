@@ -9,8 +9,9 @@ import AppKit
     init(){panel.isOpaque=false;panel.backgroundColor = .clear;panel.hasShadow=false;panel.level = .statusBar;panel.ignoresMouseEvents=true;panel.sharingType = .none;panel.collectionBehavior=[.canJoinAllSpaces,.fullScreenAuxiliary,.transient];panel.contentView=view}
     func show(_ text:String,success:Bool,pending:Bool=false,bounds:CGRect?=nil){
         hide();self.pending=pending;view.text=text;view.success=success;view.pending=pending
-        let screen=NSScreen.screens.first{ $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main!
-        let area=(bounds ?? screen.visibleFrame).intersection(screen.visibleFrame)
+        let screen=NSScreen.screens.first{ $0.frame.contains(bounds.map{CGPoint(x:$0.midX,y:$0.midY)} ?? NSEvent.mouseLocation) } ?? NSScreen.main!
+        var area=(bounds ?? screen.visibleFrame).intersection(screen.visibleFrame)
+        if area.isNull||area.width<100||area.height<100{area=screen.visibleFrame}
         let width:CGFloat=297,height:CGFloat=78
         let x=min(screen.visibleFrame.maxX-width,max(screen.visibleFrame.minX,area.midX-width/2))
         let y=max(screen.visibleFrame.minY,area.minY+42)

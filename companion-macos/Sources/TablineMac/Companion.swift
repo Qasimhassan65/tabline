@@ -42,7 +42,7 @@ import TablineCore
         case "show":
             guard !busy else{throw CompanionError.message("Wait for the current screenshot or save dialog to finish.")}
             pending?.cancel();toast.hide();generation+=1;let epoch=generation
-            rope.show(Card.tabs(request),request:request);noticeBounds=rope.panel.screen?.visibleFrame
+            rope.show(Card.tabs(request),request:request);noticeBounds=rope.sourceBounds
             if request["desktop"] as? Bool != false,capture.screenPermission {
                 Task{[weak self] in guard let self=self else{return};do{let windows=try await self.capture.windows();guard self.rope.isVisible,self.generation==epoch else{return};self.rope.view.appendApps(windows)}catch{NativeHost.log(error.localizedDescription)}}
             }

@@ -8,7 +8,7 @@ if [[ ! -x "$task_source/Contents/MacOS/TablineCompanion" ]]; then echo 'Keep In
 printf 'Install Tabline Companion for this Mac user in %s? [y/N] ' "$task_parent"
 read -r task_answer
 [[ "$task_answer" == y || "$task_answer" == Y ]] || exit 0
-if pgrep -x TablineCompanion >/dev/null;then echo 'Quit Chrome and Tabline Companion, then run the installer again.';read -r;exit 1;fi
+if pgrep -f '/Tabline Companion[.]app/Contents/MacOS/TablineCompanion' >/dev/null;then echo 'Quit Chrome and Tabline Companion, then run the installer again.';read -r;exit 1;fi
 mkdir -p "$task_parent"
 if [[ -e "$task_destination" ]]; then
   task_backup="$task_parent/Tabline Companion.previous.$(date +%Y%m%d%H%M%S).app"

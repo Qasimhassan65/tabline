@@ -23,5 +23,9 @@ codesign --force --sign - "$task_app"
 codesign --verify --strict "$task_app"
 cp Install.command "$task_root/dist/$task_arch/Install.command"
 chmod +x "$task_root/dist/$task_arch/Install.command"
+cp Uninstall.command "$task_root/dist/$task_arch/Uninstall.command"
+chmod +x "$task_root/dist/$task_arch/Uninstall.command"
+if [[ -f README.md ]]; then cp README.md "$task_root/dist/$task_arch/README.md";fi
+ditto -c -k --keepParent "$task_root/dist/$task_arch" "$task_root/dist/Tabline-Mac-$task_arch-development.zip"
 printf 'Built development app: %s\n' "$task_app"
 printf 'This ad-hoc signed build is for testing; public distribution requires Developer ID signing and notarization.\n'

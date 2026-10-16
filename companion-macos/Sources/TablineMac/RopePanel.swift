@@ -11,6 +11,7 @@ final class PickerPanel:NSPanel {override var canBecomeKey:Bool{true};override v
     private var workspaceObserver:NSObjectProtocol?
     private var sourcePID:pid_t=0
     private(set) var isVisible=false
+    private(set) var sourceBounds=CGRect.zero
     init() {
         panel=PickerPanel(contentRect:.zero,styleMask:[.borderless,.nonactivatingPanel],backing:.buffered,defer:false)
         panel.isOpaque=false;panel.backgroundColor = .clear;panel.hasShadow=false;panel.level = .floating
@@ -25,8 +26,9 @@ final class PickerPanel:NSPanel {override var canBecomeKey:Bool{true};override v
         let b=request["bounds"] as? [String:Any] ?? [:]
         let primary=NSScreen.screens.first?.frame.height ?? 900
         let left=(b["left"] as? Double ?? 0),top=(b["top"] as? Double ?? 0)
-        let width=(b["width"] as? Double ?? NSScreen.main?.frame.width ?? 1200),height=(b["height"] as? Double ?? 800)
+        let width=(b["width"] as? Double ?? Double(NSScreen.main?.frame.width ?? 1200)),height=(b["height"] as? Double ?? 800)
         let browser=CGRect(x:left,y:primary-top-height,width:width,height:height)
+        sourceBounds=browser
         let screen=NSScreen.screens.max{a,c in a.frame.intersection(browser).width*a.frame.intersection(browser).height < c.frame.intersection(browser).width*c.frame.intersection(browser).height} ?? NSScreen.main!
         var pageTop=browser.maxY-88
         if let viewport=request["viewport"] as? [String:Any],let h=viewport["height"] as? Double,h>0 {
@@ -35,8 +37,9 @@ final class PickerPanel:NSPanel {override var canBecomeKey:Bool{true};override v
         }
         let x=max(screen.visibleFrame.minX,browser.minX+8),right=min(screen.visibleFrame.maxX,browser.maxX-8)
         let logicalWidth=max(180,right-x),available=max(120,min(pageTop-screen.visibleFrame.minY,height-96))
-        let provisional=RopeLayout(width:logicalWidth,height:available,count:cards.count)
-        let pickerHeight=min(available,18+provisional.sag+318*provisional.cardWidth/376+(provisional.compact&&cards.count>1 ? 56:0))
+        let countHint=max(cards.count,request["desktop"] as? Bool != false ? 2:0)
+        let provisional=RopeLayout(width:logicalWidth,height:available,count:countHint)
+        let pickerHeight=min(available,18+provisional.sag+318*provisional.cardWidth/376+(provisional.compact&&countHint>1 ? 56:0))
         panel.setFrame(CGRect(x:x,y:max(screen.visibleFrame.minY,pageTop-pickerHeight),width:logicalWidth,height:pickerHeight),display:false)
         view.frame=CGRect(origin:.zero,size:panel.frame.size);view.reset(cards)
         isVisible=true;panel.makeKeyAndOrderFront(nil);panel.makeFirstResponder(view)
@@ -77,7 +80,7 @@ final class PickerPanel:NSPanel {override var canBecomeKey:Bool{true};override v
     private var pressedArrow=0
     private let decoded=NSCache<NSString,NSImage>()
     var layout:RopeLayout{RopeLayout(width:bounds.width,height:bounds.height,count:cards.count,offset:offset)}
-    var animating:Bool{abs(target-offset)>0.4}
+    var animating:Bool{abs(target-offset)>0.01||abs(velocity)>0.01}
     var stats:[String:Any]{["cards":cards.count,"offset":Double(offset),"targetOffset":Double(target),"animating":animating,"cardIds":cards.map{$0.id},"visible":window?.isVisible ?? false]}
     override init(frame:NSRect){super.init(frame:frame);decoded.totalCostLimit=3*1024*1024;decoded.countLimit=12}
     required init?(coder:NSCoder){fatalError("Programmatic view only")}
@@ -160,6 +163,7 @@ final class PickerPanel:NSPanel {override var canBecomeKey:Bool{true};override v
         Self.color(45,61,82).setFill();NSBezierPath(ovalIn:CGRect(x:center-2*scale,y:y+27*scale,width:4*scale,height:5*scale)).fill()
     }
     private func actions(_ opacity:CGFloat) {
+        NSGraphicsContext.saveGraphicsState();NSGraphicsContext.current?.cgContext.setAlpha(opacity);defer{NSGraphicsContext.restoreGraphicsState()}
         for save in [false,true]{let r=CGRect(x:save ? 193:72,y:182,width:save ? 112:114,height:47)
             glass(r,radius:23.5,edge:Self.color(149,179,194,opacity*0.7))
             let icon=NSBezierPath();icon.lineWidth=1.8;icon.lineCapStyle = .round;icon.lineJoinStyle = .round

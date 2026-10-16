@@ -91,7 +91,7 @@ final class Card {
             previewAttempts.insert(card.id)
             previewTasks[card.id]=Task { [weak self,weak card] in
                 guard let self=self,let card=card else{return}
-                defer{self.previewTasks.removeValue(forKey:card.id);if epoch==self.generation{updated()}}
+                defer{if epoch==self.generation{self.previewTasks.removeValue(forKey:card.id);updated()}}
                 do {
                     let image=try await self.image(window,thumbnail:true)
                     guard !Task.isCancelled,epoch==self.generation else{return}
@@ -140,7 +140,7 @@ final class Card {
         guard screenPermission else{throw CompanionError.message("Screen Recording permission is required for restricted Chrome pages.")}
         let title=request["title"] as? String ?? ""
         let content=try await SCShareableContent.excludingDesktopWindows(true,onScreenWindowsOnly:false)
-        let candidates=content.windows.filter{$0.owningApplication?.bundleIdentifier=="com.google.Chrome"&&($0.title?.hasPrefix(title)==true)&&!title.isEmpty&&$0.windowLayer==0}
+        let candidates=content.windows.filter{$0.owningApplication?.bundleIdentifier=="com.google.Chrome"&&($0.title?.hasPrefix(title)==true) && !title.isEmpty&&$0.windowLayer==0}
         guard candidates.count==1,let window=candidates.first else{throw CompanionError.message("The Chrome window changed or could not be identified safely.")}
         let image=try await self.image(window,thumbnail:false)
         guard let viewport=request["viewport"] as? [String:Any],let height=viewport["height"] as? Double,height>0 else{

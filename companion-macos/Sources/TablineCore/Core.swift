@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 
 public enum CompanionError: LocalizedError {
     case message(String)
