@@ -1,5 +1,5 @@
 importScripts('native-bridge.js');
-importScripts('mac-onboarding.js');
+importScripts('browser-capture.js');
 // Keep only tiny last-seen previews. Full-size captures exist only while copying.
 const THUMB_LIMIT = 4 * 1024 * 1024;
 const thumbnails = new Map(), jobs = new Map();
@@ -10,7 +10,7 @@ const ready = chrome.storage.session.get('quietThumbnails').then(({quietThumbnai
 });
 function reportError(error) {
   chrome.action.setTitle({title: error.message || String(error)});
-  nativeRequest('notice', {success:false, text:error.message || 'Please try again.'}).catch(()=>{});
+  browserPlatform.then(mac=>mac ? browserNotice(false) : nativeRequest('notice', {success:false, text:error.message || 'Please try again.'})).catch(()=>{});
 }
 function putThumbnail(item) {
   thumbnails.delete(item.id); thumbnails.set(item.id,item);
@@ -132,6 +132,7 @@ async function waitUntilRendered(id) {
   return chrome.tabs.get(id);
 }
 async function copyTab(id, operation='copy') {
+  if(await browserPlatform) return copyBrowserTab(id,operation);
   if(copyBusy) throw new Error('A screenshot is already being copied.');
   copyBusy=true;ropeOpen=false;
   for(const timer of jobs.values())clearTimeout(timer);jobs.clear();
@@ -166,7 +167,7 @@ async function handleNativeEvent(message) {
   if(message.event==='capture-error') chrome.action.setTitle({title:message.error||'Screenshot failed'});
 }
 async function openWithSetup(tab) {
-  if (!await MacOnboarding.beforeOpen()) return;
+  if(await browserPlatform) return openBrowserRope(tab);
   try {await open(tab);}
   catch(error) {
     reportError(error);
@@ -176,7 +177,7 @@ async function openWithSetup(tab) {
 }
 async function initialize() {
   await ready;
-  try{await nativeRequest('ping');}catch{}
+  if(!await browserPlatform) {try{await nativeRequest('ping');}catch{}}
   for(const tab of await chrome.tabs.query({active:true})) schedule(tab.id,900);
 }
 chrome.commands.onCommand.addListener(async command=>{
@@ -188,17 +189,33 @@ chrome.tabs.onUpdated.addListener((id,change)=>{if(change.url){thumbnails.delete
 chrome.tabs.onRemoved.addListener(id=>{clearTimeout(jobs.get(id));jobs.delete(id);thumbnails.delete(id);persist();});
 chrome.runtime.onStartup.addListener(initialize);
 chrome.runtime.onInstalled.addListener(() => {
-  MacOnboarding.installed().catch(error => chrome.action.setTitle({title:error.message}));
   initialize().catch(()=>{});
 });
 chrome.runtime.onMessage.addListener((message,sender,reply)=>{
+  if(sender.id!==chrome.runtime.id || message.target==='offscreen') return;
   (async()=>{
+    if(message.type==='CLIPBOARD_READY' || message.type==='CLIPBOARD_DONE') {
+      if(sender.url!==chrome.runtime.getURL('clipboard.html') || !clipboardJob)throw new Error('No clipboard operation pending.');
+      if(message.type==='CLIPBOARD_READY')return {dataUrl:clipboardJob.dataUrl};
+      message.ok?clipboardJob.resolve():clipboardJob.reject(new Error(message.error||'Clipboard write failed.'));
+      return {ok:true};
+    }
+    if(message.type==='BROWSER_CARDS') {
+      if(!await browserPlatform) throw new Error('The browser picker is available on Mac.');
+      return {ok:true,cards:await browserCards()};
+    }
+    if(message.type==='BROWSER_CLOSED') {ropeOpen=false;return {ok:true};}
+    if(message.type==='BROWSER_CAPTURE') {
+      if(!await browserPlatform) throw new Error('Use the Windows rope to capture.');
+      return copyBrowserTab(message.tabId,message.operation==='save'?'save':'copy');
+    }
+    if(await browserPlatform && ['COMPANION_STATUS','COMPANION_SETUP','MAC_SETUP'].includes(message.type))
+      return {ok:true,platform:'mac',mode:'browser',version:chrome.runtime.getManifest().version};
     if(message.type==='COMPANION_STATUS') return nativeRequest('ping', {}, message.setup ? 1500 : 10000);
-    if(message.type==='MAC_SETUP') return MacOnboarding.open(true).then(()=>({ok:true}));
     if(message.type==='COMPANION_SETUP') return nativeRequest('setup');
     if(message.type==='CLEAR_PREVIEWS') {
       generation++;for(const timer of jobs.values())clearTimeout(timer);jobs.clear();clearTimeout(persistTimer);
-      await captureQueue;thumbnails.clear();thumbBytes=0;await chrome.storage.session.remove('quietThumbnails');await nativeRequest('clear');return {ok:true};
+      await captureQueue;thumbnails.clear();thumbBytes=0;await chrome.storage.session.remove('quietThumbnails');if(!await browserPlatform)await nativeRequest('clear');return {ok:true};
     }
     if(message.type==='COPY') return copyTab(message.tabId,message.operation==='save'?'save':'copy');
     if(message.type==='STATS') return {ok:true,thumbBytes,frameBytes:0,thumbnails:thumbnails.size,ropeOpen};

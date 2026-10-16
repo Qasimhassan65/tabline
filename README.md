@@ -1,10 +1,12 @@
-# Tabline 2.3.1 · Midnight Glass
+# Tabline 2.4.0 · Midnight Glass
 
-## Mac development edition
+## Mac browser edition
 
-The same Chrome extension includes a macOS 14+ companion for Apple Silicon and Intel. Installing or loading Tabline unpacked on Mac automatically opens required desktop setup and requests a universal installer download. The graphical app installs itself, a connection button passes the extension ID, and the setup page detects permission approval automatically. Opening the downloaded app and approving macOS access remain explicit user actions. Windows continues using its existing companion unchanged.
+Load the extension folder unpacked in Chrome, open a regular webpage and press **Option + S** (or click Tabline's toolbar icon). The rope opens immediately, with no Mac companion, installer, Screen Recording permission or connection check. Chrome tabs across normal windows are included. Click a card to activate its tab, close the rope and copy a fresh full-resolution PNG; hover for Copy or Save. Unloaded tabs must finish loading first. Small last-seen thumbnails are optional, so an identity card remains clickable even before a preview exists. Internal Chrome pages use a compact picker because Chrome blocks in-page overlays there. Some protected surfaces cannot be captured.
 
-See [Mac installation and build instructions](companion-macos/README.md) and the [interactive Mac testing checklist](docs/MACOS-TESTING.md). Development artifacts come from the `macos-companion` GitHub workflow. Apple signing/notarization and interactive capture/layout checks remain required before public release. The Windows-specific DWM and GDI details below describe the existing Windows edition.
+Windows continues using its existing native companion for desktop apps and tabs. Mac desktop-app support is deferred. The old companion source is retained for reference only; it is not installed, launched or required by the current Mac extension. See [Mac testing checklist](docs/MACOS-TESTING.md).
+
+Chrome requires a focused document for image clipboard writes. Normal secure pages copy directly. On protected or insecure HTTP pages a small temporary Tabline copying window may appear after capture, then close automatically. No screenshot or clipboard window is installed as an OS application.
 
 A transparent silver cable with micro-clips and Midnight Glass cards. Sharp image previews, site/app icons, a single title footer, blue hover outline and smooth scrolling. Click any card to close the picker, switch to the selected tab/app and copy a fresh screenshot. A missing preview does not disable the card. Hover a card for Copy and Save. Save opens a PNG destination dialog; cancelling leaves no saved file or success notice. Success and failure appear in a compact bottom-center toast.
 

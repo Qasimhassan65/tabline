@@ -7,6 +7,8 @@ async function refresh(){
  $('#desktop').textContent=(config.desktopApps===false?'Show ':'Hide ')+(platform==='mac'?'Mac app windows':'Windows apps');
 }
 async function check(){
+ if(platform==='mac'){$('#desktop-status').textContent='Ready · Chrome tabs only. No companion or Mac screen permission needed.';return;}
+
  $('#check').disabled=true;
  try {
   const result=await chrome.runtime.sendMessage({type:'COMPANION_STATUS'});
@@ -30,10 +32,11 @@ $('#clear').onclick=async()=>{const result=await chrome.runtime.sendMessage({typ
  const info=await chrome.runtime.getPlatformInfo();platform=info.os;
  const mac=platform==='mac';
  $('#developer-connection').hidden=mac;
+ $('#check').hidden=mac;$('#desktop').hidden=mac;
  $('#download-mac').textContent='Finish Mac setup';
- $('#mac-setup').hidden=!mac;$('#windows-setup').hidden=mac;$('#setup-mac').hidden=!mac;$('#download-mac').hidden=!mac;
- $('#companion-heading').textContent=mac?'Your Mac companion.':'Your Windows companion.';
+ $('#mac-setup').hidden=true;$('#windows-setup').hidden=mac;$('#setup-mac').hidden=true;$('#download-mac').hidden=true;
+ $('#companion-heading').textContent=mac?'Ready on your Mac.':'Your Windows companion.';
  $('#shortcut-label').textContent=mac?'Option + S':'Alt + S';$('#paste-label').textContent=mac?'Command + V':'Ctrl + V';
- $('#app-preview-info').textContent=mac?'Mac app previews are small, on-demand snapshots while the rope is open. Screen Recording permission is needed for desktop windows.':'App previews use Windows’ built-in compositor while the rope is open. They are released on close.';
+ $('#app-preview-info').textContent=mac?'On Mac, Tabline captures Chrome tabs directly. Press Option + S on a webpage to open the rope. Chrome internal pages use a compact picker. Desktop Mac apps are not included.':'App previews use Windows’ built-in compositor while the rope is open. They are released on close.';
  await refresh();await check();
 })().catch(error=>{$('#desktop-status').textContent=error.message;});

@@ -22,18 +22,18 @@ async function settings(os, status) {
   await new Promise(resolve=>setImmediate(resolve));
   return {get:selector=>elements.get(selector), messages};
 }
-test('Mac settings explain required screen permission and link setup', async()=>{
+test('Mac settings are ready without a companion or native connection check', async()=>{
   const ui=await settings('mac',{ok:true, platform:'mac', version:'2.3.0', permissions:{screenRecording:false}});
   assert.equal(ui.get('#windows-setup').hidden,true);
-  assert.equal(ui.get('#mac-setup').hidden,false);
+  assert.equal(ui.get('#mac-setup').hidden,true);
   assert.equal(ui.get('#shortcut-label').textContent,'Option + S');
-  assert.match(ui.get('#desktop-status').textContent,/finish Mac setup/);
+  assert.match(ui.get('#desktop-status').textContent,/Chrome tabs only/);
   assert.equal(ui.get('#developer-connection').hidden,true);
   assert.equal(ui.get('#check').disabled,false);
-  await ui.get('#setup-mac').onclick();
-  assert.equal(ui.messages.at(-1).type,'COMPANION_SETUP');
-  await ui.get('#download-mac').onclick();
-  assert.equal(ui.messages.at(-1).type,'MAC_SETUP');
+  assert.equal(ui.get('#setup-mac').hidden,true);
+  assert.equal(ui.get('#download-mac').hidden,true);
+  assert.equal(ui.get('#desktop').hidden,true);
+  assert.equal(ui.messages.length,0);
 });
 test('Existing Windows host without a platform field retains Windows setup',async()=>{
   const ui=await settings('win',{ok:true,version:'2.2.0'});
@@ -43,8 +43,8 @@ test('Existing Windows host without a platform field retains Windows setup',asyn
   assert.match(ui.get('#desktop-status').textContent,/Windows companion connected/);
   assert.equal(ui.get('#paste-label').textContent,'Ctrl + V');
 });
-test('Missing Mac host offers setup and re-enables connection check',async()=>{
+test('Missing Mac host does not block the Chrome-only edition',async()=>{
   const ui=await settings('mac',{ok:false,error:'Native host not found'});
-  assert.match(ui.get('#desktop-status').textContent,/Companion not connected/);
+  assert.match(ui.get('#desktop-status').textContent,/No companion/);
   assert.equal(ui.get('#check').disabled,false);
 });

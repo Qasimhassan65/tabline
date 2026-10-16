@@ -1,1 +1,10 @@
-{"name":"tabline","version":"2.3.1","private":true,"description":"On-demand Chrome and desktop screenshot rope","scripts":{"check":"node --check background.js && node --check native-bridge.js && node --check settings.js && node --check mac-onboarding.js && node --check mac-setup.js"}}
+{
+  "name": "tabline",
+  "version": "2.4.0",
+  "private": true,
+  "description": "On-demand Chrome and desktop screenshot rope",
+  "scripts": {
+    "check": "node --check background.js && node --check native-bridge.js && node --check browser-capture.js && node --check rope-ui.js && node --check clipboard.js && node --check picker.js && node --check settings.js",
+    "test": "node --test tests/native-bridge.test.cjs tests/settings-platform.test.cjs tests/browser-capture.test.cjs"
+  }
+}

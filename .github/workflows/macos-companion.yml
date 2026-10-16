@@ -1,4 +1,4 @@
-name: macOS companion
+name: Tabline extension
 on:
   push:
     branches: [macos-companion]
@@ -7,28 +7,6 @@ on:
 permissions:
   contents: read
 jobs:
-  mac:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: macos-14
-            arch: arm64
-          - runner: macos-15-intel
-            arch: x86_64
-    runs-on: ${{ matrix.runner }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Test Swift core and compile native companion
-        run: swift test --package-path companion-macos
-      - name: Build the development application bundle
-        run: bash companion-macos/build.sh '${{ matrix.arch }}'
-      - name: Verify native messaging handshake
-        run: python3 tests/native-host-smoke.py 'companion-macos/dist/${{ matrix.arch }}/Tabline Companion.app/Contents/MacOS/TablineCompanion'
-      - uses: actions/upload-artifact@v4
-        with:
-          name: Tabline-Mac-${{ matrix.arch }}-development
-          path: companion-macos/dist/Tabline-Mac-${{ matrix.arch }}-development.zip
   extension:
     runs-on: windows-latest
     steps:
@@ -37,34 +15,11 @@ jobs:
         with:
           node-version: 22
       - run: npm run check
-      - run: node --test tests/native-bridge.test.cjs tests/settings-platform.test.cjs tests/mac-onboarding.test.cjs
-      - name: Package unpacked extension for Mac testers
+      - run: npm test
+      - name: Package Chrome-only Mac extension
         shell: pwsh
-        run: Compress-Archive -LiteralPath manifest.json,background.js,native-bridge.js,settings.html,settings.js,settings.css,mac-onboarding.js,mac-setup.html,mac-setup.js,mac-setup.css -DestinationPath Tabline-extension.zip
+        run: Compress-Archive -LiteralPath manifest.json,background.js,native-bridge.js,browser-capture.js,rope-ui.js,clipboard.html,clipboard.css,clipboard.js,picker.html,picker.css,picker.js,settings.html,settings.js,settings.css -DestinationPath Tabline-extension.zip
       - uses: actions/upload-artifact@v4
         with:
           name: Tabline-Chrome-extension
           path: Tabline-extension.zip
-  universal-installer:
-    needs: [mac, extension]
-    runs-on: macos-14
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: Tabline-Mac-*-development
-          path: archives
-          merge-multiple: true
-      - name: Assemble universal installer from the tested architectures
-        run: |
-          mkdir -p companion-macos/dist
-          ditto -x -k archives/Tabline-Mac-arm64-development.zip companion-macos/dist
-          ditto -x -k archives/Tabline-Mac-x86_64-development.zip companion-macos/dist
-          TABLINE_USE_PREBUILT=1 bash companion-macos/build.sh universal
-          python3 tests/native-host-smoke.py 'companion-macos/dist/universal/Tabline Companion.app/Contents/MacOS/TablineCompanion'
-      - uses: actions/upload-artifact@v4
-        with:
-          name: Tabline-Mac-installer
-          path: |
-            companion-macos/dist/Tabline-Mac.dmg
-            companion-macos/dist/Tabline-Mac.dmg.sha256
