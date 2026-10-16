@@ -2,6 +2,12 @@
 
 A transparent silver cable with micro-clips and Midnight Glass cards. Sharp image previews, site/app icons, a single title footer, blue hover outline and smooth scrolling. Click any card to close the picker, switch to the selected tab/app and copy a fresh screenshot. A missing preview does not disable the card. Hover a card for Copy and Save. Save opens a PNG destination dialog; cancelling leaves no saved file or success notice. Success and failure appear in a compact bottom-center toast.
 
+## Curved rope
+
+The current tab starts centered and upright before the first visible frame. Browser cards follow the cable's shallow curve with up to 1.8 degrees of tilt, pivoting at the clip fastener. Images, labels, hover outlines and buttons rotate together. Clips stay seated on the cable. The same scroll position controls translation, elevation and tilt, retaining the existing elapsed-time easing without bounce or automatic tab activation.
+
+Desktop app cards follow the same curved path and retain their live DWM previews. Their complete surfaces stay upright because DWM thumbnail destinations do not support rotation; no extra screenshot stream or preview cache is introduced to simulate it. Source order remains stable during preview refreshes. The first and last cards can reach the center, and resizing preserves the source at the center. Drawing and Copy/Save hit testing share one transform, including display scaling. Motion timers still stop when scrolling settles or the picker closes.
+
 ## Update / install
 
 Existing project: reload Tabline in `chrome://extensions`. This also disconnects the previous helper and stops its old background capture jobs. Refresh any webpage still showing an older injected rope. Press Alt+S.
@@ -33,14 +39,14 @@ Cache limits exclude runtime, metadata, transient full-resolution capture buffer
 
 `companion/Build.ps1` uses the Windows .NET Framework C# compiler. This edition needs no C++ DLL, Node or Python runtime for normal use. `npm run check` checks extension JavaScript syntax.
 
-`companion/TablineCompanion-2.2.0-rope.exe --self-test` runs owned test windows, tests foreground screenshot copying and eased scrolling, and writes test-render PNG files beside the helper. It deliberately replaces the clipboard with a fixture screenshot and clicks only its owned test window. Test code is separate from the ordinary capture path.
+`companion/TablineCompanion-2.2.0-curved.exe --self-test` runs owned test windows, tests foreground screenshot copying and eased scrolling, and writes test-render PNG files beside the helper. It deliberately replaces the clipboard with a fixture screenshot and clicks only its owned test window. Test code is separate from the ordinary capture path.
 
 
 ## Stable baseline
 
 The `stable-before-curvature` tag preserves the approved silver cable, micro-clips and Midnight Glass UI before any curvature work. Capture behavior is unchanged in this baseline.
 
-Source code is tracked in Git. The exact installed Windows x64 companion is attached to the matching [stable release](https://github.com/Qasimhassan65/tabline/releases/tag/stable-before-curvature). To use it without rebuilding, place `TablineCompanion-2.2.0-rope.exe` inside `companion/`, then run `companion/Install.cmd` with your unpacked Chrome extension ID. Otherwise the installer builds the companion from source automatically.
+Source code is tracked in Git. The exact installed Windows x64 companion is attached to the matching [stable release](https://github.com/Qasimhassan65/tabline/releases/tag/stable-before-curvature). After checking out the stable tag, place `TablineCompanion-2.2.0-rope.exe` inside `companion/`, then run `companion/Install.cmd` with your unpacked Chrome extension ID to use that baseline without rebuilding. Otherwise the installer builds the companion for the checked-out version from source automatically. Re-run the installer when updating to the curved edition so registration points to its new companion executable.
 
 Personal screenshots, generated native-host registration and older build outputs are excluded from the repository. Each installation generates its own registration.
 

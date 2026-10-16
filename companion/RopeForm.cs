@@ -53,6 +53,9 @@ internal sealed class RopeForm:Form {
  internal RopeForm(){Text="Tabline rope";FormBorderStyle=FormBorderStyle.None;ShowInTaskbar=false;TopMost=true;StartPosition=FormStartPosition.Manual;InputTimer.Tick+=(s,e)=>CheckInput();MotionTimer.Tick+=(s,e)=>AnimateScroll();}
  internal void Open(List<TablineCompanion.Card> cards,Dictionary<string,object> request){
   ReleaseThumbnails();DisposeImages();Cards.Clear();Cards.AddRange(cards);VisualOffset=0;TargetOffset=0;MotionTimer.Stop();Hover=null;FocusMismatchAt=0;DismissReason=null;
+  // Picker-only order: never move real browser tabs or change app focus.
+  int current=Cards.FindIndex(c=>c.Current);
+  if(current>=0){var active=Cards[current];Cards.RemoveAt(current);Cards.Insert(Cards.Count/2,active);}
   SourceWindow=TablineCompanion.GetForegroundWindow();TablineCompanion.Rect bounds;Rectangle screen=Screen.FromHandle(SourceWindow).WorkingArea;
   if(!TablineCompanion.GetWindowRect(SourceWindow,out bounds)||bounds.Right-bounds.Left<300)bounds=new TablineCompanion.Rect{Left=screen.Left,Top=screen.Top,Right=screen.Right,Bottom=screen.Bottom};
   using(var g=Graphics.FromHwnd(SourceWindow))UiScale=Math.Max(.75f,g.DpiX/96f);
@@ -60,7 +63,9 @@ internal sealed class RopeForm:Form {
   if(viewport!=null&&viewport.ContainsKey("height")){float ratio=viewport.ContainsKey("scale")?Convert.ToSingle(viewport["scale"]):UiScale;int top=bounds.Bottom-(int)(Convert.ToDouble(viewport["height"])*ratio)-8;pageTop=Math.Max(bounds.Top+(int)(40*UiScale),Math.Min(bounds.Top+(int)(160*UiScale),top));}
   PageInset=(pageTop-bounds.Top)/UiScale;
   LayoutForSource(new Rectangle(bounds.Left,bounds.Top,bounds.Right-bounds.Left,bounds.Bottom-bounds.Top),UiScale,false);
-  MouseWasDown=(GetAsyncKeyState(1)&0x8000)!=0;Show();SetWindowDisplayAffinity(Handle,0x11);Render();InputTimer.Start();
+  current=Cards.FindIndex(c=>c.Current);
+  if(current>=0){VisualOffset=current*Pitch;TargetOffset=(int)Math.Round(VisualOffset);}
+  MouseWasDown=(GetAsyncKeyState(1)&0x8000)!=0;SetWindowDisplayAffinity(Handle,0x11);PresentRope();Show();SyncThumbnails();InputTimer.Start();
  }
  internal void Dismiss(string reason="requested"){if(!Visible)return;DismissReason=reason;MotionTimer.Stop();InputTimer.Stop();Tip.Hide(this);ReleaseThumbnails();Hide();DisposeImages();TablineCompanion.Send(new{@event="closed"});}
  private void DisposeImages(){foreach(var card in Cards){if(card.Image!=null){card.Image.Dispose();card.Image=null;}if(card.Icon!=null){card.Icon.Dispose();card.Icon=null;}}}
@@ -79,7 +84,9 @@ internal sealed class RopeForm:Form {
   bool down=(GetAsyncKeyState(1)&0x8000)!=0;if(down&&!MouseWasDown&&Hit(PointToClient(Cursor.Position))==null){Dismiss();return;}MouseWasDown=down;
  }
  internal void ScrollCards(int amount){
-  int max=MaximumOffset();TargetOffset=Math.Max(0,Math.Min(max,TargetOffset+amount));Tip.Hide(this);bool hadHover=Hover!=null;Hover=null;if(hadHover)Render();
+  int max=MaximumOffset(),next=Math.Max(0,Math.Min(max,TargetOffset+amount));
+  if(next==TargetOffset&&Math.Abs(next-VisualOffset)<.2)return;
+  TargetOffset=next;Tip.Hide(this);bool hadHover=Hover!=null;Hover=null;if(hadHover)Render();
   if(Math.Abs(TargetOffset-VisualOffset)<.2)return;
   if(!MotionTimer.Enabled){MotionClock.Restart();LastMotionTime=0;MotionTimer.Start();}
  }
@@ -88,22 +95,26 @@ internal sealed class RopeForm:Form {
   VisualOffset+=(float)((TargetOffset-VisualOffset)*(1-Math.Exp(-delta/55)));
   if(Math.Abs(TargetOffset-VisualOffset)<.45){VisualOffset=TargetOffset;MotionTimer.Stop();}
   Render();
+  if(!Animating)UpdateHover(PointToClient(Cursor.Position));
  }
  protected override void OnMouseWheel(MouseEventArgs e){ScrollCards(-e.Delta*2);base.OnMouseWheel(e);}
  private void UpdateHover(Point point){var card=Hit(point);string id=card==null?null:card.Id;if(Hover!=id){Tip.Hide(this);Hover=id;Cursor=card==null?Cursors.Default:Cursors.Hand;Render();}}
- protected override void OnMouseMove(MouseEventArgs e){UpdateHover(e.Location);base.OnMouseMove(e);}
- internal void ClickAt(Point point){var card=Hit(point);LastClickPoint=point.X+","+point.Y+" offset="+VisualOffset;LastClickedId=card==null?null:card.Id;if(card==null)return;var r=CardBounds(Cards.IndexOf(card));var local=new PointF(point.X/UiScale,point.Y/UiScale);string operation=SaveBounds(r).Contains(local)?"save":"copy";TablineCompanion.Select(card,operation);}
+ protected override void OnMouseMove(MouseEventArgs e){if(!Animating)UpdateHover(e.Location);base.OnMouseMove(e);}
+ internal void ClickAt(Point point){var card=Hit(point);LastClickPoint=point.X+","+point.Y+" offset="+VisualOffset;LastClickedId=card==null?null:card.Id;if(card==null)return;string operation=OperationAt(Cards.IndexOf(card),point);TablineCompanion.Select(card,operation);}
+ private string OperationAt(int index,Point point){return new RectangleF(193,182,112,47).Contains(CardLocalPoint(index,point))?"save":"copy";}
  protected override void OnMouseUp(MouseEventArgs e){if(e.Button==MouseButtons.Left)ClickAt(e.Location);base.OnMouseUp(e);}
  private static RectangleF Part(RectangleF r,float x,float y,float w,float h){float k=r.Width/376f;return new RectangleF(r.X+x*k,r.Y+y*k,w*k,h*k);}
  private static RectangleF SaveBounds(RectangleF r){return Part(r,193,182,112,47);}
  private static RectangleF CopyBounds(RectangleF r){return Part(r,72,182,114,47);}
  private static RectangleF PictureBounds(RectangleF r){return Part(r,13,14,350,218);}
- private int MaximumOffset(){return (int)Math.Ceiling(Math.Max(0,RowPadding*2+Cards.Count*CardWidth+Math.Max(0,Cards.Count-1)*Gap-Width/UiScale));}
+ private int MaximumOffset(){return (int)Math.Round(Math.Max(0,(Cards.Count-1)*Pitch));}
+ private float CableSag{get{return Math.Max(14,Math.Min(26,.016f*Width/UiScale));}}
  private void ConfigureMetrics(float width,float height){
-  RowPadding=Math.Min(24,Math.Max(6,(width-180)/2));Gap=Math.Min(24,Math.Max(12,width*.025f));
+  Gap=Math.Min(24,Math.Max(12,width*.025f));
   CardWidth=Math.Min(300,Math.Max(240,(width-152)/5));
-  CardWidth=Math.Min(CardWidth,Math.Max(72,width-RowPadding*2));
-  CardWidth=Math.Min(CardWidth,Math.Max(72,(height-42)*376/304));
+  CardWidth=Math.Min(CardWidth,Math.Max(72,width-12));
+  CardWidth=Math.Min(CardWidth,Math.Max(72,(height-18-Math.Max(14,Math.Min(26,.016f*width)))*376/318));
+  RowPadding=(width-CardWidth)/2;
  }
  private void LayoutForSource(Rectangle source,float scale,bool preserve){
   float previousPitch=Pitch,position=VisualOffset/previousPitch,target=TargetOffset/previousPitch;
@@ -114,18 +125,37 @@ internal sealed class RopeForm:Form {
   int available=Math.Max(1,Math.Min(screen.Bottom,source.Bottom-8)-top);
   int width=Math.Max(1,right-left);
   ConfigureMetrics(width/UiScale,available/UiScale);
-  int height=(int)Math.Ceiling((38+304*CardWidth/376+14)*UiScale);
+  int height=(int)Math.Ceiling((18+Math.Max(14,Math.Min(26,.016f*width/UiScale))+318*CardWidth/376)*UiScale);
   Bounds=new Rectangle(left,top,width,Math.Max(1,Math.Min(available,height)));
   if(preserve){VisualOffset=Math.Min(MaximumOffset(),position*Pitch);TargetOffset=Math.Min(MaximumOffset(),(int)Math.Round(target*Pitch));}
  }
- private float CableY(float x){float t=Math.Max(0,Math.Min(1,x/(Width/UiScale)));return 14+90*t*(1-t);}
+ private float CableY(float x){float half=Math.Max(1,Width/UiScale/2),u=Math.Max(-1,Math.Min(1,(x-half)/half));return 14+CableSag*(1-u*u);}
+ private float CableSlope(float x){float half=Math.Max(1,Width/UiScale/2),u=Math.Max(-1,Math.Min(1,(x-half)/half));return -2*CableSag*u/half;}
+ private float CardRoll(int index){
+  // A DWM thumbnail has rectangular destinations, so keep its complete card
+  // upright on the arc rather than rotating a frame around an upright image.
+  if(Cards[index].Native)return 0;
+  var r=CardBounds(index);return Math.Max(-1.8f,Math.Min(1.8f,(float)(Math.Atan(CableSlope(r.X+r.Width/2))*90/Math.PI)));
+ }
+ private Matrix CardTransform(int index){
+  var r=CardBounds(index);float k=r.Width/376,angle=CardRoll(index)*(float)Math.PI/180;
+  float c=(float)Math.Cos(angle),s=(float)Math.Sin(angle),px=188,py=FastenerFromTop-CableToCard-ClipAboveCable;
+  return new Matrix(k*c,k*s,-k*s,k*c,r.X+k*(px-c*px+s*py),r.Y+k*(py-s*px-c*py));
+ }
+ private void ApplyCardTransform(Graphics g,int index){using(var matrix=CardTransform(index))g.MultiplyTransform(matrix);}
+ private PointF CardLocalPoint(int index,Point point){var p=new[]{new PointF(point.X/UiScale,point.Y/UiScale)};using(var matrix=CardTransform(index)){matrix.Invert();matrix.TransformPoints(p);}return p[0];}
  protected override void WndProc(ref Message m){if(m.Msg==0x21){m.Result=new IntPtr(3);return;}if(m.Msg==0x020E){int delta=(short)((m.WParam.ToInt64()>>16)&65535);ScrollCards(delta*2);m.Result=IntPtr.Zero;return;}base.WndProc(ref m);}
  private RectangleF CardBounds(int i){float x=RowPadding+i*Pitch-VisualOffset;return new RectangleF(x,CableY(x+CardWidth/2)+CableToCard*CardWidth/376,CardWidth,285*CardWidth/376);}
- private TablineCompanion.Card Hit(Point p){for(int i=0;i<Cards.Count;i++)if(CardBounds(i).Contains(p.X/UiScale,p.Y/UiScale))return Cards[i];return null;}
+ private TablineCompanion.Card Hit(Point p){
+  float x=p.X/UiScale;
+  for(int i=Cards.Count-1;i>=0;i--){var r=CardBounds(i);if(x<r.Left-12||x>r.Right+12)continue;var local=CardLocalPoint(i,p);using(var face=Rounded(new RectangleF(0,0,376,285),18))if(face.IsVisible(local))return Cards[i];}
+  return null;
+ }
  internal void UpdateTabs(List<TablineCompanion.Card> tabs){
+  int anchor=Cards.Count==0?-1:Math.Max(0,Math.Min(Cards.Count-1,(int)Math.Round(VisualOffset/Pitch)));string anchorId=anchor<0?null:Cards[anchor].Id;
   bool changed=false;foreach(var incoming in tabs){var existing=Cards.Find(c=>!c.Native&&c.Id==incoming.Id);if(existing==null){Cards.Add(incoming);changed=true;}else{if(existing.Title!=incoming.Title){existing.Title=incoming.Title;changed=true;}if(existing.ImageData!=incoming.ImageData){if(existing.Image!=null){existing.Image.Dispose();existing.Image=null;}existing.ImageData=incoming.ImageData;changed=true;}}}
   for(int i=Cards.Count-1;i>=0;i--)if(!Cards[i].Native&&!tabs.Exists(c=>c.Id==Cards[i].Id)){if(Cards[i].Image!=null)Cards[i].Image.Dispose();if(Cards[i].Icon!=null)Cards[i].Icon.Dispose();Cards.RemoveAt(i);changed=true;}
-  if(changed&&Visible)Render();
+  if(changed){int next=Cards.FindIndex(c=>c.Id==anchorId);if(next>=0){float shift=(next-anchor)*Pitch;VisualOffset+=shift;TargetOffset+=(int)Math.Round(shift);}VisualOffset=Math.Max(0,Math.Min(MaximumOffset(),VisualOffset));TargetOffset=Math.Max(0,Math.Min(MaximumOffset(),TargetOffset));if(Hover!=null&&!Cards.Exists(c=>c.Id==Hover))Hover=null;if(Visible)Render();}
  }
  internal void ClearImages(){DisposeImages();foreach(var card in Cards)card.ImageData=null;if(Visible)Render();}
  private static GraphicsPath Rounded(RectangleF r,float radius){var p=new GraphicsPath();float d=radius*2;p.AddArc(r.X,r.Y,d,d,180,90);p.AddArc(r.Right-d,r.Y,d,d,270,90);p.AddArc(r.Right-d,r.Bottom-d,d,d,0,90);p.AddArc(r.X,r.Bottom-d,d,d,90,90);p.CloseFigure();return p;}
@@ -171,8 +201,8 @@ internal sealed class RopeForm:Form {
    DrawCable(g);
    for(int i=0;i<Cards.Count;i++){
     var card=Cards[i];var r=CardBounds(i);bool hovered=Hover==card.Id;
-    if(r.Right<0||r.Left>width){if(card.Image!=null){card.Image.Dispose();card.Image=null;}if(card.Icon!=null){card.Icon.Dispose();card.Icon=null;}continue;}
-    var saved=g.Save();g.TranslateTransform(r.X,r.Y);float k=r.Width/376;g.ScaleTransform(k,k);
+    if(r.Right<-12||r.Left>width+12){if(card.Image!=null){card.Image.Dispose();card.Image=null;}if(card.Icon!=null){card.Icon.Dispose();card.Icon=null;}continue;}
+    var saved=g.Save();ApplyCardTransform(g,i);
     var frame=new RectangleF(0,0,376,285);
     for(int layer=5;layer>=1;layer--){float spread=layer*.75f;using(var path=Rounded(new RectangleF(-spread,4-spread,376+spread*2,285+spread*2),18+spread))using(var shadow=new SolidBrush(Color.FromArgb(8,0,0,0)))g.FillPath(shadow,path);}
     using(var path=Rounded(frame,18)){
@@ -202,7 +232,9 @@ internal sealed class RopeForm:Form {
      }
      DrawAction(g,new RectangleF(72,182,114,47),false);DrawAction(g,new RectangleF(193,182,112,47),true);
     }
-    DrawClip(g,188,-CableToCard-ClipAboveCable);g.Restore(saved);
+    g.Restore(saved);
+    // The card pivots around the fastener; the folded cap stays on the cable.
+    saved=g.Save();g.TranslateTransform(r.X,r.Y);float k=r.Width/376;g.ScaleTransform(k,k);DrawClip(g,188,-CableToCard-ClipAboveCable);g.Restore(saved);
    }
   }
   return bitmap;
@@ -211,7 +243,7 @@ internal sealed class RopeForm:Form {
  private PointF[] CableBand(float offset){
   float width=Width/UiScale;int count=Math.Max(16,(int)Math.Ceiling(width/2));var points=new PointF[count+1];
   for(int i=0;i<=count;i++){
-   float x=width*i/count,t=x/width,slope=90*(1-2*t)/width;
+   float x=width*i/count,slope=CableSlope(x);
    float normal=(float)Math.Sqrt(1+slope*slope);
    points[i]=new PointF(x-offset*slope/normal,CableY(x)+offset/normal);
   }
@@ -277,7 +309,8 @@ internal sealed class RopeForm:Form {
   using(var shade=new Pen(Color.FromArgb(155,28,40,56),.65f))g.DrawArc(shade,rivet,20,137);
   using(var slot=new Pen(Color.FromArgb(202,36,48,64),.8f)){slot.StartCap=slot.EndCap=LineCap.Round;g.DrawLine(slot,center-.9f,cy-.6f,center+.7f,cy+.7f);}
  }
- private void Render(){if(!Visible)return;using(var bitmap=PaintRope())LayeredCanvas.Present(this,bitmap,255);SyncThumbnails();}
+ private void PresentRope(){using(var bitmap=PaintRope())LayeredCanvas.Present(this,bitmap,255);}
+ private void Render(){if(!Visible)return;PresentRope();SyncThumbnails();}
  // DWM reuses the desktop compositor's existing window surfaces; no WGC stream or bitmap capture.
  private void SyncThumbnails(){
   var visible=new HashSet<string>();
