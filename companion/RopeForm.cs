@@ -22,6 +22,8 @@ internal sealed class RopeForm:Form {
  private readonly Dictionary<string,AppThumbnailWindow> DwmThumbnails=new Dictionary<string,AppThumbnailWindow>();
  private readonly Timer InputTimer=new Timer{Interval=40},MotionTimer=new Timer{Interval=15};
  private readonly Stopwatch MotionClock=new Stopwatch();
+ private readonly ScrollInputRouter ScrollInput=new ScrollInputRouter();
+ private int PendingWheelX,PendingWheelY,WheelAxis,LastWheelAt;
  private readonly ToolTip Tip=new ToolTip{InitialDelay=700,AutoPopDelay=4000};
  private float CardWidth=240,Gap=24,RowPadding=24,PageInset=88;
  private Rectangle SourceBounds;
@@ -52,6 +54,7 @@ internal sealed class RopeForm:Form {
  protected override CreateParams CreateParams{get{var p=base.CreateParams;p.ExStyle|=0x80000|0x80|0x08000000;return p;}}
  internal RopeForm(){Text="Tabline rope";FormBorderStyle=FormBorderStyle.None;ShowInTaskbar=false;TopMost=true;StartPosition=FormStartPosition.Manual;InputTimer.Tick+=(s,e)=>CheckInput();MotionTimer.Tick+=(s,e)=>AnimateScroll();}
  internal void Open(List<TablineCompanion.Card> cards,Dictionary<string,object> request){
+  StopWheelInput();
   ReleaseThumbnails();DisposeImages();Cards.Clear();Cards.AddRange(cards);VisualOffset=0;TargetOffset=0;MotionTimer.Stop();Hover=null;FocusMismatchAt=0;DismissReason=null;
   // Picker-only order: never move real browser tabs or change app focus.
   int current=Cards.FindIndex(c=>c.Current);
@@ -65,9 +68,12 @@ internal sealed class RopeForm:Form {
   LayoutForSource(new Rectangle(bounds.Left,bounds.Top,bounds.Right-bounds.Left,bounds.Bottom-bounds.Top),UiScale,false);
   current=Cards.FindIndex(c=>c.Current);
   if(current>=0){VisualOffset=current*Pitch;TargetOffset=(int)Math.Round(VisualOffset);}
-  MouseWasDown=(GetAsyncKeyState(1)&0x8000)!=0;SetWindowDisplayAffinity(Handle,0x11);PresentRope();Show();SyncThumbnails();InputTimer.Start();
+  MouseWasDown=(GetAsyncKeyState(1)&0x8000)!=0;SetWindowDisplayAffinity(Handle,0x11);PresentRope();Show();SyncThumbnails();ScrollInput.Start(SourceWindow,Handle,WheelArea());InputTimer.Start();
  }
- internal void Dismiss(string reason="requested"){if(!Visible)return;DismissReason=reason;MotionTimer.Stop();InputTimer.Stop();Tip.Hide(this);ReleaseThumbnails();Hide();DisposeImages();TablineCompanion.Send(new{@event="closed"});}
+ private Rectangle WheelArea(){int bottom=Math.Min(Screen.FromHandle(SourceWindow).WorkingArea.Bottom,SourceBounds.Bottom-8);return new Rectangle(Left,Top,Width,Math.Max(0,bottom-Top));}
+ private void StopWheelInput(){ScrollInput.Stop();PendingWheelX=PendingWheelY=WheelAxis=LastWheelAt=0;}
+ internal void Dismiss(string reason="requested"){StopWheelInput();if(!Visible)return;DismissReason=reason;MotionTimer.Stop();InputTimer.Stop();Tip.Hide(this);ReleaseThumbnails();Hide();DisposeImages();TablineCompanion.Send(new{@event="closed"});}
+ protected override void OnVisibleChanged(EventArgs e){if(!Visible&&ScrollInput!=null)StopWheelInput();base.OnVisibleChanged(e);}
  private void DisposeImages(){foreach(var card in Cards){if(card.Image!=null){card.Image.Dispose();card.Image=null;}if(card.Icon!=null){card.Icon.Dispose();card.Icon=null;}}}
  private void CheckInput(){
   TablineCompanion.Rect current;
@@ -91,13 +97,29 @@ internal sealed class RopeForm:Form {
   if(!MotionTimer.Enabled){MotionClock.Restart();LastMotionTime=0;MotionTimer.Start();}
  }
  private void AnimateScroll(){
+  FlushWheelInput();
   double now=MotionClock.Elapsed.TotalMilliseconds,delta=now-LastMotionTime;LastMotionTime=now;
   VisualOffset+=(float)((TargetOffset-VisualOffset)*(1-Math.Exp(-delta/55)));
   if(Math.Abs(TargetOffset-VisualOffset)<.45){VisualOffset=TargetOffset;MotionTimer.Stop();}
   Render();
   if(!Animating)UpdateHover(PointToClient(Cursor.Position));
  }
- protected override void OnMouseWheel(MouseEventArgs e){ScrollCards(-e.Delta*2);base.OnMouseWheel(e);}
+ internal void RouteWheel(int delta,bool horizontal){
+  if(!Visible||delta==0||(GetAsyncKeyState(17)&0x8000)!=0)return;
+  int now=Environment.TickCount;if(unchecked((uint)(now-LastWheelAt))>160)WheelAxis=0;LastWheelAt=now;
+  if(horizontal)PendingWheelX+=delta*2;else PendingWheelY-=delta*2;
+  // One batch per existing animation tick, retaining fine touchpad deltas.
+  if(!MotionTimer.Enabled){MotionClock.Restart();LastMotionTime=0;MotionTimer.Start();}
+ }
+ private void FlushWheelInput(){
+  if(PendingWheelX==0&&PendingWheelY==0)return;
+  // Choose the dominant axis once per gesture; diagonal packets must not add
+  // two distances or fight one another. Horizontal wins an exact tie.
+  if(WheelAxis==0)WheelAxis=Math.Abs(PendingWheelX)>=Math.Abs(PendingWheelY)?1:2;
+  int amount=WheelAxis==1?PendingWheelX:PendingWheelY;PendingWheelX=PendingWheelY=0;
+  if(amount!=0)ScrollCards(amount);
+ }
+ protected override void OnMouseWheel(MouseEventArgs e){RouteWheel(e.Delta,false);base.OnMouseWheel(e);}
  private void UpdateHover(Point point){var card=Hit(point);string id=card==null?null:card.Id;if(Hover!=id){Tip.Hide(this);Hover=id;Cursor=card==null?Cursors.Default:Cursors.Hand;Render();}}
  protected override void OnMouseMove(MouseEventArgs e){if(!Animating)UpdateHover(e.Location);base.OnMouseMove(e);}
  internal void ClickAt(Point point){var card=Hit(point);LastClickPoint=point.X+","+point.Y+" offset="+VisualOffset;LastClickedId=card==null?null:card.Id;if(card==null)return;string operation=OperationAt(Cards.IndexOf(card),point);TablineCompanion.Select(card,operation);}
@@ -127,6 +149,7 @@ internal sealed class RopeForm:Form {
   ConfigureMetrics(width/UiScale,available/UiScale);
   int height=(int)Math.Ceiling((18+Math.Max(14,Math.Min(26,.016f*width/UiScale))+318*CardWidth/376)*UiScale);
   Bounds=new Rectangle(left,top,width,Math.Max(1,Math.Min(available,height)));
+  ScrollInput.UpdateArea(WheelArea());
   if(preserve){VisualOffset=Math.Min(MaximumOffset(),position*Pitch);TargetOffset=Math.Min(MaximumOffset(),(int)Math.Round(target*Pitch));}
  }
  private float CableY(float x){float half=Math.Max(1,Width/UiScale/2),u=Math.Max(-1,Math.Min(1,(x-half)/half));return 14+CableSag*(1-u*u);}
@@ -144,7 +167,7 @@ internal sealed class RopeForm:Form {
  }
  private void ApplyCardTransform(Graphics g,int index){using(var matrix=CardTransform(index))g.MultiplyTransform(matrix);}
  private PointF CardLocalPoint(int index,Point point){var p=new[]{new PointF(point.X/UiScale,point.Y/UiScale)};using(var matrix=CardTransform(index)){matrix.Invert();matrix.TransformPoints(p);}return p[0];}
- protected override void WndProc(ref Message m){if(m.Msg==0x21){m.Result=new IntPtr(3);return;}if(m.Msg==0x020E){int delta=(short)((m.WParam.ToInt64()>>16)&65535);ScrollCards(delta*2);m.Result=IntPtr.Zero;return;}base.WndProc(ref m);}
+ protected override void WndProc(ref Message m){if(m.Msg==0x21){m.Result=new IntPtr(3);return;}if(m.Msg==ScrollInputRouter.WheelMessage){if(ScrollInput.Accepts(m.LParam))RouteWheel(m.WParam.ToInt32(),(m.LParam.ToInt64()&1)!=0);m.Result=IntPtr.Zero;return;}if(m.Msg==0x020E){int delta=(short)((m.WParam.ToInt64()>>16)&65535);RouteWheel(delta,true);m.Result=IntPtr.Zero;return;}base.WndProc(ref m);}
  private RectangleF CardBounds(int i){float x=RowPadding+i*Pitch-VisualOffset;return new RectangleF(x,CableY(x+CardWidth/2)+CableToCard*CardWidth/376,CardWidth,285*CardWidth/376);}
  private TablineCompanion.Card Hit(Point p){
   float x=p.X/UiScale;
@@ -350,7 +373,7 @@ internal sealed class RopeForm:Form {
   try{Render();Application.DoEvents();System.Threading.Thread.Sleep(60);DwmFlush();using(var bitmap=LayeredCanvas.ReadScreen(Bounds))using(var stream=new MemoryStream()){bitmap.Save(stream,ImageFormat.Png);return "data:image/png;base64,"+Convert.ToBase64String(stream.ToArray());}}
   finally{SetWindowDisplayAffinity(Handle,0x11);foreach(var window in DwmThumbnails.Values)window.ExcludeFromCapture(true);}
  }
- protected override void Dispose(bool disposing){if(disposing){if(CableSurface!=null){CableSurface.Dispose();CableSurface=null;}ReleaseThumbnails();InputTimer.Dispose();MotionTimer.Dispose();Tip.Dispose();DisposeImages();}base.Dispose(disposing);}
+ protected override void Dispose(bool disposing){if(disposing){ScrollInput.Dispose();PendingWheelX=PendingWheelY=0;if(CableSurface!=null){CableSurface.Dispose();CableSurface=null;}ReleaseThumbnails();InputTimer.Dispose();MotionTimer.Dispose();Tip.Dispose();DisposeImages();}base.Dispose(disposing);}
 }
 
 

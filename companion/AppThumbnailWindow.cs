@@ -49,8 +49,8 @@ internal sealed class AppThumbnailWindow:Form {
  internal void ExcludeFromCapture(bool exclude){SetWindowDisplayAffinity(Handle,exclude?0x11u:0);if(Actions!=null)Actions.ExcludeFromCapture(exclude);}
  protected override void OnMouseMove(MouseEventArgs e){Rope.HoverFromPreview();base.OnMouseMove(e);}
  protected override void OnMouseUp(MouseEventArgs e){if(e.Button==MouseButtons.Left)Rope.ClickAt(Rope.PointToClient(PointToScreen(e.Location)));base.OnMouseUp(e);}
- protected override void OnMouseWheel(MouseEventArgs e){Rope.ScrollCards(-e.Delta*2);base.OnMouseWheel(e);}
- protected override void WndProc(ref Message m){if(m.Msg==0x21){m.Result=new IntPtr(3);return;}if(m.Msg==0x020E){int delta=(short)((m.WParam.ToInt64()>>16)&65535);Rope.ScrollCards(delta*2);m.Result=IntPtr.Zero;return;}base.WndProc(ref m);}
+ protected override void OnMouseWheel(MouseEventArgs e){Rope.RouteWheel(e.Delta,false);base.OnMouseWheel(e);}
+ protected override void WndProc(ref Message m){if(m.Msg==0x21){m.Result=new IntPtr(3);return;}if(m.Msg==0x020E){int delta=(short)((m.WParam.ToInt64()>>16)&65535);Rope.RouteWheel(delta,true);m.Result=IntPtr.Zero;return;}base.WndProc(ref m);}
  protected override void Dispose(bool disposing){if(disposing&&Actions!=null){Actions.Dispose();Actions=null;}if(Thumbnail!=IntPtr.Zero){DwmUnregisterThumbnail(Thumbnail);Thumbnail=IntPtr.Zero;}base.Dispose(disposing);}
 }
 
@@ -78,6 +78,6 @@ internal sealed class PreviewActionsWindow:Form {
  internal void ExcludeFromCapture(bool exclude){SetWindowDisplayAffinity(Handle,exclude?0x11u:0);}
  protected override void OnMouseMove(MouseEventArgs e){Rope.HoverFromPreview();base.OnMouseMove(e);}
  protected override void OnMouseUp(MouseEventArgs e){if(e.Button==MouseButtons.Left)Rope.ClickAt(Rope.PointToClient(PointToScreen(e.Location)));base.OnMouseUp(e);}
- protected override void OnMouseWheel(MouseEventArgs e){Rope.ScrollCards(-e.Delta*2);base.OnMouseWheel(e);}
- protected override void WndProc(ref Message m){if(m.Msg==0x21){m.Result=new IntPtr(3);return;}if(m.Msg==0x020E){int delta=(short)((m.WParam.ToInt64()>>16)&65535);Rope.ScrollCards(delta*2);m.Result=IntPtr.Zero;return;}base.WndProc(ref m);}
+ protected override void OnMouseWheel(MouseEventArgs e){Rope.RouteWheel(e.Delta,false);base.OnMouseWheel(e);}
+ protected override void WndProc(ref Message m){if(m.Msg==0x21){m.Result=new IntPtr(3);return;}if(m.Msg==0x020E){int delta=(short)((m.WParam.ToInt64()>>16)&65535);Rope.RouteWheel(delta,true);m.Result=IntPtr.Zero;return;}base.WndProc(ref m);}
 }

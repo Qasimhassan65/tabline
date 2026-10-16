@@ -8,6 +8,10 @@ The current tab starts centered and upright before the first visible frame. Brow
 
 Desktop app cards follow the same curved path and retain their live DWM previews. Their complete surfaces stay upright because DWM thumbnail destinations do not support rotation; no extra screenshot stream or preview cache is introduced to simulate it. Source order remains stable during preview refreshes. The first and last cards can reach the center, and resizing preserves the source at the center. Drawing and Copy/Save hit testing share one transform, including display scaling. Motion timers still stop when scrolling settles or the picker closes.
 
+While the picker is visible, horizontal scrolling or the mouse wheel anywhere in the current browser page area moves the rope, including transparent gaps and space below the cards. The page stays stationary, including at the ends of the row. Small touchpad deltas are retained and diagonal gestures use one dominant axis. Chrome's toolbar, obscuring windows and other foreground apps keep their normal input. Control-wheel on the page passes through. Closing the picker immediately restores normal scrolling.
+
+Wheel routing uses a temporary Windows input hook on its own idle message thread, installed only while the picker is open and removed on hide, dismissal or disposal. It forwards small wheel messages to the existing animation timer without painting or waiting in the hook. The input is scoped to the source window and page bounds, and stale messages cannot reach a later picker session. There is no new screenshot processing, image cache, polling timer, persistent input listener or change to capture quality.
+
 ## Update / install
 
 Existing project: reload Tabline in `chrome://extensions`. This also disconnects the previous helper and stops its old background capture jobs. Refresh any webpage still showing an older injected rope. Press Alt+S.
@@ -39,7 +43,7 @@ Cache limits exclude runtime, metadata, transient full-resolution capture buffer
 
 `companion/Build.ps1` uses the Windows .NET Framework C# compiler. This edition needs no C++ DLL, Node or Python runtime for normal use. `npm run check` checks extension JavaScript syntax.
 
-`companion/TablineCompanion-2.2.0-curved.exe --self-test` runs owned test windows, tests foreground screenshot copying and eased scrolling, and writes test-render PNG files beside the helper. It deliberately replaces the clipboard with a fixture screenshot and clicks only its owned test window. Test code is separate from the ordinary capture path.
+`companion/TablineCompanion-2.2.0-scroll.exe --self-test` runs owned test windows, tests foreground screenshot copying and eased scrolling, and writes test-render PNG files beside the helper. It deliberately replaces the clipboard with a fixture screenshot and clicks only its owned test window. Test code is separate from the ordinary capture path.
 
 
 ## Stable baseline
