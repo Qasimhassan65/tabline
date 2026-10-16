@@ -1,8 +1,8 @@
-# Tabline 2.2 · Midnight Glass
+# Tabline 2.3.1 · Midnight Glass
 
 ## Mac development edition
 
-The same Chrome extension now includes a macOS 14+ companion implementation for Apple Silicon and Intel. It uses ScreenCaptureKit for on-demand app snapshots and full-resolution screenshots, with the same rope, Copy/Save actions and native clipboard workflow. Installation and privacy permissions are explicit, one-time steps. Windows continues using its existing companion unchanged.
+The same Chrome extension includes a macOS 14+ companion for Apple Silicon and Intel. Installing or loading Tabline unpacked on Mac automatically opens required desktop setup and requests a universal installer download. The graphical app installs itself, a connection button passes the extension ID, and the setup page detects permission approval automatically. Opening the downloaded app and approving macOS access remain explicit user actions. Windows continues using its existing companion unchanged.
 
 See [Mac installation and build instructions](companion-macos/README.md) and the [interactive Mac testing checklist](docs/MACOS-TESTING.md). Development artifacts come from the `macos-companion` GitHub workflow. Apple signing/notarization and interactive capture/layout checks remain required before public release. The Windows-specific DWM and GDI details below describe the existing Windows edition.
 

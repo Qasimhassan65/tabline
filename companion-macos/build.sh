@@ -30,7 +30,7 @@ chmod +x "$task_root/dist/$task_arch/Uninstall.command"
 if [[ -f README.md ]]; then cp README.md "$task_root/dist/$task_arch/README.md";fi
 ditto -c -k --keepParent "$task_root/dist/$task_arch" "$task_root/dist/Tabline-Mac-$task_arch-development.zip"
 if [[ "$task_arch" == universal ]]; then
-  xcrun lipo -verify_arch arm64 x86_64 "$task_app/Contents/MacOS/TablineCompanion"
+  xcrun lipo "$task_app/Contents/MacOS/TablineCompanion" -verify_arch arm64 x86_64
   task_disk="$task_root/dist/disk-image"
   mkdir -p "$task_disk"
   ditto "$task_app" "$task_disk/Tabline Companion.app"

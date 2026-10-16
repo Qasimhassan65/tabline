@@ -2,18 +2,20 @@
 
 Development edition for macOS 14 or later, on Apple Silicon and Intel. The existing Chrome extension uses this companion for the Midnight Glass rope, desktop window discovery, clipboard copying and PNG saving. Windows continues using its existing companion.
 
-## Install a test build
+## Automatic Mac setup
 
-1. Open the latest successful [Mac build](https://github.com/Qasimhassan65/tabline/actions/workflows/macos-companion.yml?query=branch%3Amacos-companion). Download the `arm64` artifact for Apple Silicon or `x86_64` for Intel. GitHub requires sign-in to download workflow artifacts.
-2. Extract the downloaded artifact, then extract the development ZIP inside it. Keep `Install.command` beside `Tabline Companion.app`.
-3. Load the extension folder in Chrome at `chrome://extensions`, using Developer mode and Load unpacked. Open Tabline's options and copy its extension ID.
-4. Quit Chrome and any previous Tabline companion before updating the companion. Open `Install.command`, confirm installation, and follow the setup window. The app is copied to your own `Applications` folder; an existing app is preserved as a dated backup.
-5. Paste the extension ID and choose **Connect Chrome extension**. Choose **Allow Screen Recording** to include desktop app windows. Approve the permission in System Settings and restart Chrome if macOS requests it.
-6. Quit the standalone setup app, reopen Chrome, and use **Option + S**. If Chrome reserves that shortcut, assign another in `chrome://extensions/shortcuts`. Click a card to copy, or hover and choose Save.
+1. Install the Chrome extension or load its folder unpacked. On Mac, Tabline automatically opens its setup page and requests one installer download per extension version. If Chrome blocks that download, use the visible Download installer button.
+2. Open `Tabline-Mac.dmg`, open Tabline Companion, and choose **Install Tabline**. One universal installer supports both Apple Silicon and Intel. The app installs into your user Applications folder and opens the installed copy.
+3. On the Chrome setup page, choose **Connect Tabline**. Approve opening the Mac app, then choose **Connect & allow screen access** in its window. The extension ID is passed automatically; no copying, terminal or architecture selection is needed.
+4. Approve Screen Recording in macOS System Settings. Restart Chrome only if requested. The setup page detects completion automatically; no Check connection action is required. Use **Option + S** on a webpage.
+
+Mac setup is the required first-run flow, including for unpacked extensions. A ready Mac installation skips the installer on updates. Repeated shortcut presses focus the existing setup tab, and automatic download is attempted at most once per version. Connection checks run only while the setup page is visible, for at most three minutes; there is no permanent onboarding poll.
+
+The direct download is a public development prerelease at [Mac setup preview](https://github.com/Qasimhassan65/tabline/releases/tag/macos-setup-preview). GitHub Actions artifacts remain available for developer validation, but are not part of the normal setup flow.
 
 These development builds are ad-hoc signed, not Apple-notarized. If Gatekeeper blocks opening, use macOS's per-app Open Anyway approval only after verifying the downloaded build and source. Never disable Gatekeeper globally. Public release requires Developer ID signing and notarization.
 
-Screen Recording is required for desktop apps. Accessibility is optional and used only to restore a minimized window when direct capture fails. Chrome tab copying works without desktop permission once the companion is connected. A denied permission does not trigger repeated prompts while opening the rope.
+Screen Recording is required to complete Mac setup and include desktop apps. Accessibility is optional and used only to restore a minimized window when direct capture fails. Denying permission leaves setup visible without repeatedly showing OS permission prompts. The browser capture engine itself does not need desktop permission, but this edition requires completing desktop setup before opening the Mac rope.
 
 ## Preview and capture behavior
 
@@ -35,7 +37,7 @@ bash companion-macos/build.sh arm64
 python3 tests/native-host-smoke.py 'companion-macos/dist/arm64/Tabline Companion.app/Contents/MacOS/TablineCompanion'
 ```
 
-Build output is under `companion-macos/dist/`. End users do not need Swift, Node or Python. The native host registration is stored only for the current user at `~/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.tabline.companion.json`. Moving the app requires reconnecting it in setup.
+Build output is under `companion-macos/dist/`; building `universal` also creates `Tabline-Mac.dmg`. End users do not need Swift, Node or Python. User-level host manifests are registered for Google Chrome, Chrome for Testing and Chromium. Moving the app requires reconnecting it in setup. Registration requires explicit confirmation in the native app; visiting a `tabline://connect` link alone does not authorize an extension.
 
 For public distribution, build `universal`, configure a Developer ID Application identity and a notarytool keychain profile, then run `notarize.sh` with `TABLINE_SIGN_IDENTITY` and `TABLINE_NOTARY_PROFILE` set. Credentials must stay outside the repository. A Chrome developer account does not provide Apple signing credentials.
 

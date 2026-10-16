@@ -4,9 +4,9 @@ Use an interactive Mac running macOS 14 or later with Google Chrome. You can use
 
 ## Set up
 
-Follow `companion-macos/README.md`. Use the artifact matching the Mac's processor, keep the app in its installed location and connect the exact Chrome extension ID shown on that Mac. In Tabline options choose Check connection: it should report the Mac companion and permission status.
+Follow `companion-macos/README.md`. Installing or loading the extension unpacked must automatically open Mac setup and request one universal installer download. Open the disk image, choose Install Tabline, then use Connect Tabline on the browser setup page. Confirm the native connection request and approve screen access. Verify the page switches to Ready automatically. There must be no processor choice, copied ID or manual connection-check requirement.
 
-Begin with desktop Screen Recording denied. Chrome cards and copying must still work. Then grant permission using the companion setup window, quit the standalone setup app and restart Chrome when requested. Desktop cards should appear when reopening the rope. Accessibility can remain off for ordinary covered-window capture.
+Begin with desktop Screen Recording denied. Opening Tabline must return to the existing setup tab without duplicate tabs or repeated downloads. Grant permission using the companion setup window and restart Chrome only if requested. Then the rope must work and desktop cards must appear. Accessibility can remain off for ordinary covered-window capture. Repeat setup with an unpacked extension whose ID differs from the first installation, and confirm both permitted IDs remain registered after explicit native approval.
 
 ## Acceptance checklist
 
