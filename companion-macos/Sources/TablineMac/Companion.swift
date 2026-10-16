@@ -41,7 +41,7 @@ import TablineCore
     private func dispatch(_ request:[String:Any])async throws->[String:Any]{
         let action=request["action"] as? String ?? ""
         switch action {
-        case "ping":return ["version":"2.3.0","platform":"mac","protocolVersion":1,"permissions":capture.permissionInfo,"capabilities":["rope","desktop-windows","copy","save","permissions","on-demand-previews"]]
+        case "ping":return ["version":"2.3.1","platform":"mac","protocolVersion":1,"permissions":capture.permissionInfo,"capabilities":["rope","desktop-windows","copy","save","permissions","on-demand-previews","guided-setup"]]
         case "setup":setup.show();return ["permissions":capture.permissionInfo]
         case "show":
             guard !busy else{throw CompanionError.message("Wait for the current screenshot or save dialog to finish.")}
