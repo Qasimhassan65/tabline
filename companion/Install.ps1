@@ -3,7 +3,7 @@ $ErrorActionPreference = 'Stop'
 if (-not $ExtensionId) { $ExtensionId = Read-Host 'Paste the extension ID from Tabline settings' }
 $ExtensionId = $ExtensionId.Trim()
 if ($ExtensionId -cnotmatch '^[a-p]{32}$') { throw 'A Chrome extension ID must contain exactly 32 lowercase letters from a to p.' }
-$executable = Join-Path $PSScriptRoot 'TablineCompanion-2.2.0-scroll.exe'
+$executable = Join-Path $PSScriptRoot 'TablineCompanion-2.2.0-curved.exe'
 if (-not (Test-Path -LiteralPath $executable)) { & (Join-Path $PSScriptRoot 'Build.ps1') }
 $manifestPath = Join-Path $PSScriptRoot 'com.tabline.companion.json'
 $manifest = @{ name='com.tabline.companion'; description='Local Tabline Windows window previews and screenshot clipboard'; path=$executable; type='stdio'; allowed_origins=@("chrome-extension://$ExtensionId/") }
