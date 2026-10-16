@@ -1,5 +1,4 @@
 const $=selector=>document.querySelector(selector);
-const MAC_TEST_BUILDS='https://github.com/Qasimhassan65/tabline/actions/workflows/macos-companion.yml?query=branch%3Amacos-companion';
 let platform='win';
 $('#extension-id').textContent=chrome.runtime.id;
 async function refresh(){
@@ -15,7 +14,7 @@ async function check(){
   const name=result.platform==='mac'?'Mac':'Windows';
   $('#desktop-status').textContent=`${name} companion connected · ${result.version}`;
   if(result.platform==='mac'&&result.permissions?.screenRecording===false)
-   $('#desktop-status').textContent+=' · Screen Recording is off. Chrome tabs work; allow screen access to include Mac app windows.';
+   $('#desktop-status').textContent+=' · Allow Screen Recording to finish Mac setup and include desktop app windows.';
  }catch(error){$('#desktop-status').textContent='Could not check the companion: '+error.message;}
  finally{$('#check').disabled=false;}
 }
@@ -24,12 +23,14 @@ $('#previews').onclick=async()=>{const config=await chrome.storage.local.get('ta
 $('#desktop').onclick=async()=>{const config=await chrome.storage.local.get('desktopApps');await chrome.storage.local.set({desktopApps:config.desktopApps===false});$('#desktop-status').textContent='Updated. Reopen the rope to apply.';await refresh();};
 $('#check').onclick=check;
 $('#setup-mac').onclick=async()=>{try{const result=await chrome.runtime.sendMessage({type:'COMPANION_SETUP'});if(!result.ok)$('#desktop-status').textContent='Install and open the Mac companion first. '+result.error;}catch(error){$('#desktop-status').textContent=error.message;}};
-$('#download-mac').onclick=()=>chrome.tabs.create({url:MAC_TEST_BUILDS});
+$('#download-mac').onclick=()=>chrome.runtime.sendMessage({type:'MAC_SETUP'});
 $('#shortcuts').onclick=()=>chrome.tabs.create({url:'chrome://extensions/shortcuts'});
 $('#clear').onclick=async()=>{const result=await chrome.runtime.sendMessage({type:'CLEAR_PREVIEWS'});$('#status').textContent=result.ok?'Last-seen thumbnails cleared.':result.error;};
 (async()=>{
  const info=await chrome.runtime.getPlatformInfo();platform=info.os;
  const mac=platform==='mac';
+ $('#developer-connection').hidden=mac;
+ $('#download-mac').textContent='Finish Mac setup';
  $('#mac-setup').hidden=!mac;$('#windows-setup').hidden=mac;$('#setup-mac').hidden=!mac;$('#download-mac').hidden=!mac;
  $('#companion-heading').textContent=mac?'Your Mac companion.':'Your Windows companion.';
  $('#shortcut-label').textContent=mac?'Option + S':'Alt + S';$('#paste-label').textContent=mac?'Command + V':'Ctrl + V';

@@ -10,6 +10,7 @@
 <key>CFBundleVersion</key><string>230</string>
 <key>LSMinimumSystemVersion</key><string>14.0</string>
 <key>LSUIElement</key><true/>
+<key>CFBundleURLTypes</key><array><dict><key>CFBundleURLName</key><string>Tabline Chrome connection</string><key>CFBundleURLSchemes</key><array><string>tabline</string></array></dict></array>
 <key>NSHighResolutionCapable</key><true/>
 <key>NSScreenCaptureUsageDescription</key><string>Tabline shows small previews of desktop windows you select and copies or saves their screenshots. It does not continuously record your screen.</string>
 </dict></plist>

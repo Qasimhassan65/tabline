@@ -22,15 +22,18 @@ async function settings(os, status) {
   await new Promise(resolve=>setImmediate(resolve));
   return {get:selector=>elements.get(selector), messages};
 }
-test('Mac setup explains denied screen permission while keeping Chrome tabs available', async()=>{
+test('Mac settings explain required screen permission and link setup', async()=>{
   const ui=await settings('mac',{ok:true, platform:'mac', version:'2.3.0', permissions:{screenRecording:false}});
   assert.equal(ui.get('#windows-setup').hidden,true);
   assert.equal(ui.get('#mac-setup').hidden,false);
   assert.equal(ui.get('#shortcut-label').textContent,'Option + S');
-  assert.match(ui.get('#desktop-status').textContent,/Chrome tabs work/);
+  assert.match(ui.get('#desktop-status').textContent,/finish Mac setup/);
+  assert.equal(ui.get('#developer-connection').hidden,true);
   assert.equal(ui.get('#check').disabled,false);
   await ui.get('#setup-mac').onclick();
   assert.equal(ui.messages.at(-1).type,'COMPANION_SETUP');
+  await ui.get('#download-mac').onclick();
+  assert.equal(ui.messages.at(-1).type,'MAC_SETUP');
 });
 test('Existing Windows host without a platform field retains Windows setup',async()=>{
   const ui=await settings('win',{ok:true,version:'2.2.0'});

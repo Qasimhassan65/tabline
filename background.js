@@ -1,4 +1,5 @@
 importScripts('native-bridge.js');
+importScripts('mac-onboarding.js');
 // Keep only tiny last-seen previews. Full-size captures exist only while copying.
 const THUMB_LIMIT = 4 * 1024 * 1024;
 const thumbnails = new Map(), jobs = new Map();
@@ -165,6 +166,7 @@ async function handleNativeEvent(message) {
   if(message.event==='capture-error') chrome.action.setTitle({title:message.error||'Screenshot failed'});
 }
 async function openWithSetup(tab) {
+  if (!await MacOnboarding.beforeOpen()) return;
   try {await open(tab);}
   catch(error) {
     reportError(error);
@@ -185,10 +187,14 @@ chrome.tabs.onActivated.addListener(({tabId})=>schedule(tabId));
 chrome.tabs.onUpdated.addListener((id,change)=>{if(change.url){thumbnails.delete(id);persist();}if(change.status==='complete')schedule(id);});
 chrome.tabs.onRemoved.addListener(id=>{clearTimeout(jobs.get(id));jobs.delete(id);thumbnails.delete(id);persist();});
 chrome.runtime.onStartup.addListener(initialize);
-chrome.runtime.onInstalled.addListener(initialize);
+chrome.runtime.onInstalled.addListener(() => {
+  MacOnboarding.installed().catch(error => chrome.action.setTitle({title:error.message}));
+  initialize().catch(()=>{});
+});
 chrome.runtime.onMessage.addListener((message,sender,reply)=>{
   (async()=>{
-    if(message.type==='COMPANION_STATUS') return nativeRequest('ping');
+    if(message.type==='COMPANION_STATUS') return nativeRequest('ping', {}, message.setup ? 1500 : 10000);
+    if(message.type==='MAC_SETUP') return MacOnboarding.open(true).then(()=>({ok:true}));
     if(message.type==='COMPANION_SETUP') return nativeRequest('setup');
     if(message.type==='CLEAR_PREVIEWS') {
       generation++;for(const timer of jobs.values())clearTimeout(timer);jobs.clear();clearTimeout(persistTimer);
@@ -197,7 +203,7 @@ chrome.runtime.onMessage.addListener((message,sender,reply)=>{
     if(message.type==='COPY') return copyTab(message.tabId,message.operation==='save'?'save':'copy');
     if(message.type==='STATS') return {ok:true,thumbBytes,frameBytes:0,thumbnails:thumbnails.size,ropeOpen};
     return {ok:true};
-  })().then(reply,error=>{reportError(error);reply({ok:false,error:error.message});});return true;
+  })().then(reply,error=>{if(message.type!=='COMPANION_STATUS')reportError(error);reply({ok:false,error:error.message});});return true;
 });
 initialize().catch(()=>{});
 

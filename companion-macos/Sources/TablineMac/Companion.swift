@@ -16,7 +16,11 @@ import TablineCore
         rope.view.select={ [weak self] card,operation in self?.select(card,operation:operation) }
         rope.view.visibleCards={ [weak self] cards in guard let self=self else{return};self.capture.requestPreviews(cards){[weak self] in self?.rope.view.needsDisplay=true} }
         if isNative{native.start(receive:{[weak self] request in Task{@MainActor in await self?.reply(request)}},closed:{NSApp.terminate(nil)})}
-        else{setup.show()}
+        else{if let argument=CommandLine.arguments.first(where:{$0.hasPrefix("--connect-extension=")}){setup.requestConnection(String(argument.dropFirst("--connect-extension=".count)))}else{setup.show()}}
+    }
+    func application(_ application:NSApplication,open urls:[URL]){
+        guard let url=urls.first,url.scheme=="tabline",url.host=="connect",let parts=URLComponents(url:url,resolvingAgainstBaseURL:false),let id=parts.queryItems?.first(where:{$0.name=="extension"})?.value else{return}
+        setup.requestConnection(id)
     }
     func applicationWillTerminate(_ notification:Notification){pending?.cancel();capture.cancelPreviews();rope.hide(notify:false);toast.hide()}
     private func reply(_ request:[String:Any])async{
