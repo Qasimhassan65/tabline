@@ -19,7 +19,7 @@ internal sealed class AppThumbnailWindow:Form {
  private readonly TablineCompanion.Card Card;
  private PreviewActionsWindow Actions;
  private Size OverlaySize;
- private bool OverlayHovered;
+ private byte OverlayOpacity;
  private Rectangle RoundedBounds;
  private float RoundedRadius;
  protected override bool ShowWithoutActivation{get{return true;}}
@@ -43,8 +43,8 @@ internal sealed class AppThumbnailWindow:Form {
   if(DwmUpdateThumbnailProperties(Thumbnail,ref properties)!=0)return false;
   if(!Visible){Show();SetWindowDisplayAffinity(Handle,0x11);}return true;
  }
- internal bool NeedsOverlay(Size size,bool hovered){return Actions==null||OverlaySize!=size||OverlayHovered!=hovered;}
- internal void ShowActions(Bitmap surface,Rectangle bounds,Rectangle ropeBounds,bool hovered){if(Actions==null)Actions=new PreviewActionsWindow(Rope,this);if(surface!=null){OverlaySize=surface.Size;OverlayHovered=hovered;}Actions.Place(surface,bounds,ropeBounds);}
+ internal bool NeedsOverlay(Size size,byte opacity){return Actions==null||OverlaySize!=size||OverlayOpacity!=opacity;}
+ internal void ShowActions(Bitmap surface,Rectangle bounds,Rectangle ropeBounds,byte opacity){if(Actions==null)Actions=new PreviewActionsWindow(Rope,this);if(surface!=null){OverlaySize=surface.Size;OverlayOpacity=opacity;}Actions.Place(surface,bounds,ropeBounds);}
  internal void HideActions(){if(Actions!=null)Actions.Hide();}
  internal void ExcludeFromCapture(bool exclude){SetWindowDisplayAffinity(Handle,exclude?0x11u:0);if(Actions!=null)Actions.ExcludeFromCapture(exclude);}
  protected override void OnMouseMove(MouseEventArgs e){Rope.HoverFromPreview();base.OnMouseMove(e);}

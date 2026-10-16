@@ -4,13 +4,21 @@ A transparent silver cable with micro-clips and Midnight Glass cards. Sharp imag
 
 ## Curved rope
 
-The current tab starts centered and upright before the first visible frame. Browser cards follow the cable's shallow curve with up to 1.8 degrees of tilt, pivoting at the clip fastener. Images, labels, hover outlines and buttons rotate together. Clips stay seated on the cable. The same scroll position controls translation, elevation and tilt, retaining the existing elapsed-time easing without bounce or automatic tab activation.
+The current tab starts centered and upright before the first visible frame. Browser cards follow the cable's shallow curve with up to 1.8 degrees of tilt, pivoting at the clip fastener. Images, labels, hover outlines and buttons rotate together. Clips stay seated on the cable. The same scroll position controls translation, elevation and tilt, using elapsed-time, critically damped motion without bounce or automatic tab activation.
 
 Desktop app cards follow the same curved path and retain their live DWM previews. Their complete surfaces stay upright because DWM thumbnail destinations do not support rotation; no extra screenshot stream or preview cache is introduced to simulate it. Source order remains stable during preview refreshes. The first and last cards can reach the center, and resizing preserves the source at the center. Drawing and Copy/Save hit testing share one transform, including display scaling. Motion timers still stop when scrolling settles or the picker closes.
 
 On opening, a blue outline identifies the centered current tab without showing Copy/Save until hover. Hovering a preview replaces this opening outline; scrolling or using an arrow clears it for the rest of that picker session. After that, only the hovered preview is blue.
 
-Fixed Midnight Glass arrow buttons move to the next or previous card position using the existing smooth animation. Repeated clicks accumulate, the appropriate arrow dims and becomes inactive at each end, and arrows are hidden for a single source. Clear edge gutters keep native images and hover actions away from the controls. Below 360 logical pixels of window width, the arrows sit below the previews to preserve image size. The clickable targets are 44 logical pixels across. Existing mouse-wheel behavior over cards is unchanged; there is no global scroll hook or background input listener.
+Fixed Midnight Glass arrow buttons move to the next or previous card position using a short, non-bouncy glide. Repeated clicks accumulate, the appropriate arrow dims and becomes inactive at each end, and arrows are hidden for a single source. Clear edge gutters keep native images and hover actions away from the controls. Below 360 logical pixels of window width, the arrows sit below the previews to preserve image size. The clickable targets are 44 logical pixels across. Existing mouse-wheel behavior over cards is unchanged; there is no global scroll hook or background input listener.
+
+## Motion polish
+
+The cable, clips and previews settle upward together by up to 4 logical pixels over 160 ms on opening. The complete picker is visible and clickable from the first frame. Arrow clicks retain their velocity when retargeted, settle exactly on a card position and stop at firm boundaries. Wheel input retains free positioning with a quicker response; its input routing is unchanged. There is no global scroll hook, automatic wheel snapping, bounce or idle sway.
+
+Hover outlines appear over 100 ms, and Copy/Save controls fade in place over 120 ms without moving or fading the preview image. Leaving a card immediately clears its outline and controls. Navigation controls have a subtle 70 ms press response and 100 ms hover/disabled transitions; their full 44-pixel logical hit targets and disabled behavior take effect immediately. Capture dismisses the picker synchronously, without waiting for any animation. Toasts and screenshot processing are unchanged.
+
+One shared motion timer runs only while a transition is active, then stops. Windows' client-area animation preference disables these effects immediately. Only a single 244-by-56 UI control sprite is cached for fades (about 54 KiB); no extra screenshot jobs, full-resolution preview cache or animation library is introduced. Desktop preview images keep full opacity and follow the same opening movement as their frames.
 
 ## Update / install
 
@@ -43,7 +51,7 @@ Cache limits exclude runtime, metadata, transient full-resolution capture buffer
 
 `companion/Build.ps1` uses the Windows .NET Framework C# compiler. This edition needs no C++ DLL, Node or Python runtime for normal use. `npm run check` checks extension JavaScript syntax.
 
-`companion/TablineCompanion-2.2.0-navigation.exe --self-test` runs owned test windows, tests foreground screenshot copying and eased scrolling, and writes test-render PNG files beside the helper. It deliberately replaces the clipboard with a fixture screenshot and clicks only its owned test window. Test code is separate from the ordinary capture path.
+`companion/TablineCompanion-2.2.0-motion.exe --self-test` runs owned test windows, tests foreground screenshot copying and eased scrolling, and writes test-render PNG files beside the helper. It deliberately replaces the clipboard with a fixture screenshot and clicks only its owned test window. Test code is separate from the ordinary capture path.
 
 
 ## Stable baseline
