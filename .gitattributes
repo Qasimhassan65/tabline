@@ -1,0 +1,4 @@
+companion-macos/*.sh text eol=lf
+companion-macos/*.command text eol=lf
+companion-macos/*.swift text eol=lf
+companion-macos/**/*.swift text eol=lf

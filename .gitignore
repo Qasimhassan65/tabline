@@ -30,4 +30,3 @@ companion-macos/dist/
 companion-macos/.swiftpm/
 __pycache__/
 *.pyc
-

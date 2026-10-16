@@ -37,4 +37,11 @@ jobs:
         with:
           node-version: 22
       - run: npm run check
-      - run: node --test tests/native-bridge.test.cjs
+      - run: node --test tests/native-bridge.test.cjs tests/settings-platform.test.cjs
+      - name: Package unpacked extension for Mac testers
+        shell: pwsh
+        run: Compress-Archive -LiteralPath manifest.json,background.js,native-bridge.js,settings.html,settings.js,settings.css -DestinationPath Tabline-extension.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Tabline-Chrome-extension
+          path: Tabline-extension.zip

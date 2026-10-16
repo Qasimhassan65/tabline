@@ -5,6 +5,17 @@ import ImageIO
 import UniformTypeIdentifiers
 import TablineCore
 
+// A late OS callback must never copy an image after a capture has timed out.
+private final class ImageReply: @unchecked Sendable {
+    private let lock=NSLock()
+    private var continuation:CheckedContinuation<CGImage,Error>?
+    init(_ continuation:CheckedContinuation<CGImage,Error>){self.continuation=continuation}
+    func resolve(_ result:Result<CGImage,Error>){
+        lock.lock();let pending=continuation;continuation=nil;lock.unlock()
+        pending?.resume(with:result)
+    }
+}
+
 final class Card {
     let id:String
     var title:String
@@ -80,7 +91,16 @@ final class Card {
         config.ignoreShadowsSingleWindow=true
         config.ignoreGlobalClipSingleWindow=true
         config.colorSpaceName=CGColorSpace.sRGB
-        return try await SCScreenshotManager.captureImage(contentFilter:filter,configuration:config)
+        return try await withCheckedThrowingContinuation { continuation in
+            let reply=ImageReply(continuation)
+            SCScreenshotManager.captureImage(contentFilter:filter,configuration:config) { image,error in
+                if let image=image{reply.resolve(.success(image))}
+                else{reply.resolve(.failure(error ?? CompanionError.message("The window could not be captured.")))}
+            }
+            DispatchQueue.global(qos:.utility).asyncAfter(deadline:.now()+(thumbnail ? 2:8)){
+                reply.resolve(.failure(CompanionError.message("Capture timed out. Try again.")))
+            }
+        }
     }
     func requestPreviews(_ cards:[Card],updated:@escaping ()->Void) {
         guard screenPermission,!captureBusy else{return}

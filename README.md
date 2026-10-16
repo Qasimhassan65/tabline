@@ -1,5 +1,11 @@
 # Tabline 2.2 · Midnight Glass
 
+## Mac development edition
+
+The same Chrome extension now includes a macOS 14+ companion implementation for Apple Silicon and Intel. It uses ScreenCaptureKit for on-demand app snapshots and full-resolution screenshots, with the same rope, Copy/Save actions and native clipboard workflow. Installation and privacy permissions are explicit, one-time steps. Windows continues using its existing companion unchanged.
+
+See [Mac installation and build instructions](companion-macos/README.md) and the [interactive Mac testing checklist](docs/MACOS-TESTING.md). Development artifacts come from the `macos-companion` GitHub workflow. Apple signing/notarization and interactive capture/layout checks remain required before public release. The Windows-specific DWM and GDI details below describe the existing Windows edition.
+
 A transparent silver cable with micro-clips and Midnight Glass cards. Sharp image previews, site/app icons, a single title footer, blue hover outline and smooth scrolling. Click any card to close the picker, switch to the selected tab/app and copy a fresh screenshot. A missing preview does not disable the card. Hover a card for Copy and Save. Save opens a PNG destination dialog; cancelling leaves no saved file or success notice. Success and failure appear in a compact bottom-center toast.
 
 ## Curved rope
