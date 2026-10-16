@@ -1,0 +1,40 @@
+name: macOS companion
+on:
+  push:
+    branches: [macos-companion]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  mac:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-14
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x86_64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test Swift core and compile native companion
+        run: swift test --package-path companion-macos
+      - name: Build the development application bundle
+        run: bash companion-macos/build.sh '${{ matrix.arch }}'
+      - name: Verify native messaging handshake
+        run: python3 tests/native-host-smoke.py 'companion-macos/dist/${{ matrix.arch }}/Tabline Companion.app/Contents/MacOS/TablineCompanion'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Tabline-Mac-${{ matrix.arch }}-development
+          path: companion-macos/dist/${{ matrix.arch }}/
+  extension:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm run check
+      - run: node --test tests/*.test.cjs

@@ -11,8 +11,10 @@ function connectCompanion(){
   message.ok?pending.resolve(message):pending.reject(new Error(message.error));
  });
  port.onDisconnect.addListener(()=>{
-  const error=new Error(chrome.runtime.lastError?.message||'Windows companion disconnected.');
-  if(nativePort===port)nativePort=null;
+  const detail=chrome.runtime.lastError?.message;
+  if(nativePort!==port)return;
+  const error=new Error(detail||'Tabline companion disconnected.');
+  nativePort=null;
   for(const pending of nativePending.values()){clearTimeout(pending.timer);pending.reject(error);}
   nativePending.clear();ropeOpen=false;
  });
@@ -22,7 +24,7 @@ function nativeRequest(action,values={},timeout=10000){
  if(nativePending.size>=24)return Promise.reject(new Error('Capture queue is busy. Try again.'));
  return new Promise((resolve,reject)=>{
   const requestId=++nativeSequence;
-  const timer=setTimeout(()=>{nativePending.delete(requestId);reject(new Error('Windows capture timed out.'));},timeout);
+  const timer=setTimeout(()=>{nativePending.delete(requestId);reject(new Error('Screenshot request timed out.'));},timeout);
   nativePending.set(requestId,{resolve,reject,timer});
   try{connectCompanion().postMessage({action,requestId,...values});}
   catch(error){clearTimeout(timer);nativePending.delete(requestId);reject(error);}

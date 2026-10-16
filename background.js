@@ -162,6 +162,15 @@ async function copyTab(id, operation='copy') {
 async function handleNativeEvent(message) {
   if(message.event==='closed') {ropeOpen=false;return;}
   if(message.event==='copy-tab') {try{await copyTab(message.id,message.operation==='save'?'save':'copy');}catch(error){reportError(error);}}
+  if(message.event==='capture-error') chrome.action.setTitle({title:message.error||'Screenshot failed'});
+}
+async function openWithSetup(tab) {
+  try {await open(tab);}
+  catch(error) {
+    reportError(error);
+    if(/native messaging host|native host|companion disconnected|specified native|not found/i.test(error.message||''))
+      await chrome.runtime.openOptionsPage();
+  }
 }
 async function initialize() {
   await ready;
@@ -169,9 +178,9 @@ async function initialize() {
   for(const tab of await chrome.tabs.query({active:true})) schedule(tab.id,900);
 }
 chrome.commands.onCommand.addListener(async command=>{
-  if(command==='toggle-tabline') {try{const [tab]=await chrome.tabs.query({active:true,lastFocusedWindow:true});await open(tab);}catch(error){reportError(error);}}
+  if(command==='toggle-tabline') {try{const [tab]=await chrome.tabs.query({active:true,lastFocusedWindow:true});await openWithSetup(tab);}catch(error){reportError(error);}}
 });
-chrome.action.onClicked.addListener(tab=>open(tab).catch(reportError));
+chrome.action.onClicked.addListener(tab=>openWithSetup(tab).catch(reportError));
 chrome.tabs.onActivated.addListener(({tabId})=>schedule(tabId));
 chrome.tabs.onUpdated.addListener((id,change)=>{if(change.url){thumbnails.delete(id);persist();}if(change.status==='complete')schedule(id);});
 chrome.tabs.onRemoved.addListener(id=>{clearTimeout(jobs.get(id));jobs.delete(id);thumbnails.delete(id);persist();});
@@ -180,6 +189,7 @@ chrome.runtime.onInstalled.addListener(initialize);
 chrome.runtime.onMessage.addListener((message,sender,reply)=>{
   (async()=>{
     if(message.type==='COMPANION_STATUS') return nativeRequest('ping');
+    if(message.type==='COMPANION_SETUP') return nativeRequest('setup');
     if(message.type==='CLEAR_PREVIEWS') {
       generation++;for(const timer of jobs.values())clearTimeout(timer);jobs.clear();clearTimeout(persistTimer);
       await captureQueue;thumbnails.clear();thumbBytes=0;await chrome.storage.session.remove('quietThumbnails');await nativeRequest('clear');return {ok:true};

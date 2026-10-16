@@ -23,3 +23,11 @@ companion/*.jpeg
 activity.js
 companion/WindowCapture.cpp
 companion/BuildCapture.cmd
+
+# macOS companion local builds and signing artifacts
+companion-macos/.build/
+companion-macos/dist/
+companion-macos/.swiftpm/
+__pycache__/
+*.pyc
+
