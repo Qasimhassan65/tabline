@@ -17,7 +17,7 @@ import AppKit
         let y=max(screen.visibleFrame.minY,area.minY+42)
         panel.setFrame(CGRect(x:x,y:y,width:width,height:height),display:false);view.frame=CGRect(x:0,y:0,width:width,height:height)
         began=ProcessInfo.processInfo.systemUptime;panel.alphaValue=0;panel.orderFrontRegardless()
-        timer=Timer.scheduledTimer(withTimeInterval:pending ? 0.06:0.03,repeats:true){[weak self] _ in self?.tick()}
+        timer=Timer.scheduledTimer(withTimeInterval:pending ? 0.06:0.03,repeats:true){[weak self] _ in MainActor.assumeIsolated { self?.tick() }}
     }
     private func tick(){let elapsed=ProcessInfo.processInfo.systemUptime-began;if elapsed>(pending ? 10:2.9){hide();return};panel.alphaValue=elapsed<0.14 ? elapsed/0.14:(!pending&&elapsed>2.6 ? (2.9-elapsed)/0.3:1);if pending{view.angle=elapsed*300;view.needsDisplay=true}}
     func hide(){timer?.invalidate();timer=nil;panel.orderOut(nil)}

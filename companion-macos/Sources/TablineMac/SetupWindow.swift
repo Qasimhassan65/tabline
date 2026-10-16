@@ -31,7 +31,7 @@ import TablineCore
         NSLayoutConstraint.activate([stack.leadingAnchor.constraint(equalTo:window.contentView!.leadingAnchor),stack.trailingAnchor.constraint(equalTo:window.contentView!.trailingAnchor),stack.topAnchor.constraint(equalTo:window.contentView!.topAnchor),idField.widthAnchor.constraint(equalToConstant:530)])
     }
     private func button(_ title:String,_ action:Selector)->NSButton{let value=NSButton(title:title,target:self,action:action);value.bezelStyle = .rounded;return value}
-    func show(){window.center();NSApp.activate(ignoringOtherApps:true);window.makeKeyAndOrderFront(nil);refresh();timer?.invalidate();timer=Timer.scheduledTimer(withTimeInterval:1,repeats:true){[weak self] _ in self?.refresh()}}
+    func show(){window.center();NSApp.activate(ignoringOtherApps:true);window.makeKeyAndOrderFront(nil);refresh();timer?.invalidate();timer=Timer.scheduledTimer(withTimeInterval:1,repeats:true){[weak self] _ in MainActor.assumeIsolated { self?.refresh() }}}
     func message(_ text:String){status.stringValue=text}
     private func refresh(){permissions.stringValue="Screen access: \(CGPreflightScreenCaptureAccess() ? "allowed":"not allowed")    ·    Window restoration: \(AXIsProcessTrusted() ? "allowed":"optional / off")"}
     @objc private func connect(){let id=idField.stringValue.trimmingCharacters(in:.whitespacesAndNewlines);guard NativeFraming.extensionID(id) else{message("Paste the extension ID from Tabline’s Chrome settings; it must be 32 letters a–p.");return};do{try register?(id);message("Connected. Return to Chrome and press Option + S.")}catch{message(error.localizedDescription)}}

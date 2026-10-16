@@ -47,8 +47,10 @@ final class PickerPanel:NSPanel {override var canBecomeKey:Bool{true};override v
             guard let self=self,self.isVisible,!self.panel.frame.contains(NSEvent.mouseLocation) else{return};self.hide()
         }
         workspaceObserver=NSWorkspace.shared.notificationCenter.addObserver(forName:NSWorkspace.didActivateApplicationNotification,object:nil,queue:.main){[weak self] notice in
+            MainActor.assumeIsolated {
             guard let self=self,self.isVisible,let app=notice.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else{return}
             if app.processIdentifier != self.sourcePID && app.processIdentifier != getpid(){self.hide()}
+            }
         }
         view.needsDisplay=true
     }
@@ -135,7 +137,7 @@ final class PickerPanel:NSPanel {override var canBecomeKey:Bool{true};override v
         if velocity*(target-offset)<0{velocity*=0.35}
         if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion{offset=target;velocity=0;needsDisplay=true}else{wake()}
     }
-    private func wake(){guard timer==nil else{return};lastTick=ProcessInfo.processInfo.systemUptime;timer=Timer.scheduledTimer(withTimeInterval:1/60,repeats:true){[weak self] _ in self?.tick()};timer?.tolerance=0.002}
+    private func wake(){guard timer==nil else{return};lastTick=ProcessInfo.processInfo.systemUptime;timer=Timer.scheduledTimer(withTimeInterval:1/60,repeats:true){[weak self] _ in MainActor.assumeIsolated { self?.tick() }};timer?.tolerance=0.002}
     private func tick(){
         let now=ProcessInfo.processInfo.systemUptime,dt=CGFloat(now-lastTick);lastTick=now
         if animating{let x=offset-target,c=velocity+frequency*x,decay=exp(-frequency*dt);let next=target+(x+c*dt)*decay;velocity=(velocity-frequency*c*dt)*decay;offset=min(layout.maximum,max(0,next));if abs(offset-target)<0.4&&abs(velocity)<12{offset=target;velocity=0}}
